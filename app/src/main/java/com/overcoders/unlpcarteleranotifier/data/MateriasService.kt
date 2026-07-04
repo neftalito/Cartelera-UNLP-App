@@ -7,7 +7,7 @@ import okhttp3.Request
 import org.jsoup.Jsoup
 
 class MateriasService(
-    private val client: OkHttpClient = OkHttpClient(),
+    private val client: OkHttpClient = AppHttpClient.instance,
 ) {
     private val url = "https://gestiondocente.info.unlp.edu.ar/cartelera/"
 
@@ -49,7 +49,6 @@ class MateriasService(
         val request = Request.Builder()
             .url(url)
             .get()
-            .header("User-Agent", "UNLPCarteleraNotifier/1.0")
             .build()
 
         client.newCall(request).execute().use { resp ->

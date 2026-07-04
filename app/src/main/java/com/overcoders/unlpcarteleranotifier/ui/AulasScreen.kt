@@ -38,6 +38,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.overcoders.unlpcarteleranotifier.HeaderAction
+import com.overcoders.unlpcarteleranotifier.data.AppHttpClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -54,7 +55,7 @@ private data class AulaEstado(
 )
 
 private class AulasService(
-    private val client: OkHttpClient = OkHttpClient(),
+    private val client: OkHttpClient = AppHttpClient.instance,
 ) {
     private val url = "https://gestiondocente.info.unlp.edu.ar/reservas/api/consulta/estadoactual"
 
@@ -62,7 +63,6 @@ private class AulasService(
         val request = Request.Builder()
             .url(url)
             .get()
-            .header("User-Agent", "UNLPCarteleraNotifier/1.0")
             .build()
 
         client.newCall(request).execute().use { resp ->

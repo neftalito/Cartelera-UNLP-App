@@ -15,7 +15,7 @@ import org.jsoup.Jsoup
  * del HTML relevante para detectar cambios remotos de forma barata en sincronizaciones futuras.
  */
 class CursadasService(
-    private val client: OkHttpClient = OkHttpClient(),
+    private val client: OkHttpClient = AppHttpClient.instance,
 ) {
     private val url = "https://gestiondocente.info.unlp.edu.ar/cursadas/"
     private val formatter = DateTimeFormatter.ofPattern(
@@ -35,7 +35,6 @@ class CursadasService(
         val request = Request.Builder()
             .url(url)
             .get()
-            .header("User-Agent", "UNLPCarteleraNotifier/1.0")
             .build()
 
         client.newCall(request).execute().use { resp ->

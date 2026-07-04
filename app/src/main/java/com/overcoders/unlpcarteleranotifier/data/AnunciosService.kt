@@ -11,9 +11,9 @@ class ApiException(
     message: String
 ) : RuntimeException(message)
 
-class AnunciosService {
-
-    private val client = OkHttpClient()
+class AnunciosService(
+    private val client: OkHttpClient = AppHttpClient.instance,
+) {
     private val baseUrl = "https://gestiondocente.info.unlp.edu.ar/cartelera/data"
 
     data class FetchResult(

@@ -8,7 +8,7 @@ import okhttp3.Request
 import org.json.JSONObject
 
 class HorariosService(
-    private val client: OkHttpClient = OkHttpClient(),
+    private val client: OkHttpClient = AppHttpClient.instance,
 ) {
     private val baseUrl = "https://gestiondocente.info.unlp.edu.ar/reservas/consulta/xmateria/data"
 
