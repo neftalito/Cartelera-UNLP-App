@@ -418,6 +418,8 @@ fun AjustesScreen(
 
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Ocultar mensajes anulados en cartelera")
+                        // Con este filtro puede aparecer el badge "Nuevo" en anuncios que no serían nuevos
+                        // Como es un problema meramente visual y de bajo impacto, no planeo arreglarlo.
                         Switch(
                             checked = hideCancelledMateriasMessages,
                             onCheckedChange = { enabled ->

@@ -93,6 +93,7 @@ object CursadasNotificationDispatcher {
         val previousByMateria = previous.associateBy { it.materia }
         return current.filter { cursada ->
             val old = previousByMateria[cursada.materia]
+            // Con chequear el campo "ultimaModificacion" ya es suficiente, no hace falta chequear todo.
             old == null || old.ultimaModificacion != cursada.ultimaModificacion
         }
     }
