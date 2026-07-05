@@ -409,7 +409,9 @@ fun UNLPCarteleraNotifierApp(
             title = { Text("Atención") },
             text = {
                 Text(
-                    "Esta aplicación está en desarrollo, por lo que puede contener errores.\nAnte cualquier error, hay un link a google forms debajo de todo en Ajustes para reportarlo.\nEs recomendable también desactivar las optimizaciones de batería, así la app puede funcionar en segundo plano y obtener correctamente las novedades."
+                    "Esta aplicación está en desarrollo, por lo que puede contener errores.\n" +
+                    "Ante cualquier error, hay un botón de reportes debajo de todo en Ajustes para reportarlo.\n" +
+                    "Es recomendable también desactivar las optimizaciones de batería, así la app puede funcionar en segundo plano y obtener correctamente las novedades."
                 )
             },
             confirmButton = {
