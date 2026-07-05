@@ -103,8 +103,6 @@ object NotificationDispatcher {
             anunciosParaNotificar.asReversed().forEach { anuncio ->
                 manager.notify(notificationIdFor(anuncio), buildNotification(context, anuncio))
             }
-        } else if (anunciosParaNotificar.isNotEmpty()) {
-            SettingsStore.setRequestNotificationsPermission(context, true)
         }
 
         SettingsStore.setLastTotal(context, total)

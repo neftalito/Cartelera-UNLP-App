@@ -68,7 +68,6 @@ import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
-import androidx.lifecycle.lifecycleScope
 import com.overcoders.unlpcarteleranotifier.data.SettingsStore
 import com.overcoders.unlpcarteleranotifier.model.Adjunto
 import com.overcoders.unlpcarteleranotifier.model.CursadaInfo
@@ -83,7 +82,6 @@ import com.overcoders.unlpcarteleranotifier.ui.theme.UNLPCarteleraNotifierTheme
 import com.overcoders.unlpcarteleranotifier.worker.CursadasNotificationDispatcher
 import com.overcoders.unlpcarteleranotifier.worker.NotificationDispatcher
 import com.overcoders.unlpcarteleranotifier.worker.WorkScheduler
-import kotlinx.coroutines.launch
 import org.json.JSONArray
 
 /**
@@ -136,16 +134,7 @@ class MainActivity : ComponentActivity() {
             this,
             Manifest.permission.POST_NOTIFICATIONS
         ) == PackageManager.PERMISSION_GRANTED
-        lifecycleScope.launch {
-            val shouldRequest =
-                SettingsStore.shouldRequestNotificationsPermission(this@MainActivity)
-            if (hasPermission) {
-                if (shouldRequest) {
-                    SettingsStore.setRequestNotificationsPermission(this@MainActivity, false)
-                }
-                return@launch
-            }
-            SettingsStore.setRequestNotificationsPermission(this@MainActivity, false)
+        if (!hasPermission) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }

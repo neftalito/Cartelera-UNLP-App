@@ -82,8 +82,6 @@ object CursadasNotificationDispatcher {
                         buildNotification(context, cursada)
                     )
                 }
-            } else {
-                SettingsStore.setRequestNotificationsPermission(context, true)
             }
         }
 
