@@ -66,7 +66,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.IOException
-import kotlin.coroutines.coroutineContext
 
 private val diasHabiles = listOf(
     0 to "Lunes",
