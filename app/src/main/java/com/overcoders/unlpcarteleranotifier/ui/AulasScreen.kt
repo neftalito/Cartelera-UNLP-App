@@ -94,9 +94,16 @@ private class AulasService(
     }
 
     private fun formatHour(hourObj: org.json.JSONObject?): String {
-        val h = hourObj?.optString("h").orEmpty().padStart(2, '0')
-        val m = hourObj?.optString("m").orEmpty().padStart(2, '0')
-        return if (h.isBlank() || m.isBlank()) "-" else "$h:$m"
+        val rawHour = hourObj?.optString("h").orEmpty().trim()
+        val rawMinute = hourObj?.optString("m").orEmpty().trim()
+        val hour = rawHour.toIntOrNull()
+        val minute = rawMinute.toIntOrNull()
+
+        if (hour == null || minute == null || hour !in 0..23 || minute !in 0..59) {
+            return "-"
+        }
+
+        return "%02d:%02d".format(hour, minute)
     }
 }
 
