@@ -31,8 +31,6 @@ object SettingsStore {
     private val LAST_SCHEDULED_INTERVAL_KEY = intPreferencesKey("last_scheduled_interval")
     private val LAST_SCHEDULED_WIFI_ONLY_KEY =
         booleanPreferencesKey("last_scheduled_wifi_only")
-    private val REQUEST_NOTIFICATIONS_PERMISSION_KEY =
-        booleanPreferencesKey("request_notifications_permission")
     private val HAS_SEEN_DEVELOPMENT_WARNING_KEY =
         booleanPreferencesKey("has_seen_development_warning")
     private val CURSADAS_AUTO_CHECK_ENABLED_KEY =
@@ -152,17 +150,6 @@ object SettingsStore {
     suspend fun setLastScheduledWifiOnly(context: Context, wifiOnly: Boolean) {
         context.settingsDataStore.edit { prefs ->
             prefs[LAST_SCHEDULED_WIFI_ONLY_KEY] = wifiOnly
-        }
-    }
-
-    suspend fun shouldRequestNotificationsPermission(context: Context): Boolean {
-        val prefs = context.settingsDataStore.data.first()
-        return prefs[REQUEST_NOTIFICATIONS_PERMISSION_KEY] ?: false
-    }
-
-    suspend fun setRequestNotificationsPermission(context: Context, request: Boolean) {
-        context.settingsDataStore.edit { prefs ->
-            prefs[REQUEST_NOTIFICATIONS_PERMISSION_KEY] = request
         }
     }
 
