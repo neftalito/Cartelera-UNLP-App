@@ -31,6 +31,7 @@ class HorariosService(
         return suspendCancellableCoroutine { continuation ->
             val call = client.newCall(request)
 
+            // Cancelar la coroutine tiene que abortar también la request HTTP real.
             continuation.invokeOnCancellation {
                 call.cancel()
             }

@@ -127,6 +127,7 @@ fun HorariosScreen(
         val materia = selectedMateria ?: return
         val id = materia.id.toIntOrNull() ?: return
 
+        // Una nueva selección invalida cualquier carga anterior todavía en curso.
         val previousJob = horariosJob
         horariosJob = null
         previousJob?.cancel()
@@ -136,12 +137,14 @@ fun HorariosScreen(
             error = null
             try {
                 val fetchedHorarios = horariosService.fetch(id, materia.nombre)
+                // Si el usuario cambió de materia mientras llegaba la respuesta, descartamos el resultado.
                 if (selectedMateria?.id != materia.id) return@launch
                 horarioMateria = fetchedHorarios
                 expandedDays.clear()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                // El error también puede pertenecer a una selección vieja ya descartada.
                 if (selectedMateria?.id != materia.id) return@launch
                 horarioMateria = null
                 error = when (e) {
@@ -149,6 +152,7 @@ fun HorariosScreen(
                     else -> "No se pudieron obtener los horarios."
                 }
             } finally {
+                // Sólo el job todavía vigente puede cerrar el loading o soltarse del estado compartido.
                 if (horariosJob === currentJob) {
                     loadingHorarios = false
                     horariosJob = null
