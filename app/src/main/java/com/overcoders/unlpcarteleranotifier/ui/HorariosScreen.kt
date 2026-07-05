@@ -62,6 +62,7 @@ import com.overcoders.unlpcarteleranotifier.model.HorarioReserva
 import com.overcoders.unlpcarteleranotifier.model.MateriaCatalogItem
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.IOException
@@ -97,6 +98,7 @@ fun HorariosScreen(
     var materiaQuery by remember { mutableStateOf("") }
     var dropdownExpanded by remember { mutableStateOf(false) }
     var horarioMateria by remember { mutableStateOf<HorarioMateria?>(null) }
+    var horariosJob by remember { mutableStateOf<Job?>(null) }
     val horariosListState = rememberLazyListState()
 
     val materiasFiltradas = remember(materias, materiaQuery) {
@@ -107,26 +109,51 @@ fun HorariosScreen(
     val canShareHorarios =
         selectedMateria != null && !loadingHorarios && horarioMateria?.reservas?.isNotEmpty() == true
 
-    suspend fun loadHorarios() {
+    fun cancelHorariosLoad() {
+        val activeJob = horariosJob
+        horariosJob = null
+        activeJob?.cancel()
+        loadingHorarios = false
+    }
+
+    fun resetHorariosState() {
+        cancelHorariosLoad()
+        horarioMateria = null
+        error = null
+        expandedDays.clear()
+    }
+
+    fun loadHorarios() {
         val materia = selectedMateria ?: return
         val id = materia.id.toIntOrNull() ?: return
-        loadingHorarios = true
-        error = null
-        try {
-            horarioMateria = withContext(Dispatchers.IO) {
-                horariosService.fetch(id, materia.nombre)
+
+        val previousJob = horariosJob
+        horariosJob = null
+        previousJob?.cancel()
+        horariosJob = scope.launch {
+            val currentJob = coroutineContext[Job]
+            loadingHorarios = true
+            error = null
+            try {
+                val fetchedHorarios = horariosService.fetch(id, materia.nombre)
+                if (selectedMateria?.id != materia.id) return@launch
+                horarioMateria = fetchedHorarios
+                expandedDays.clear()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (selectedMateria?.id != materia.id) return@launch
+                horarioMateria = null
+                error = when (e) {
+                    is IOException -> "Error de red al obtener horarios."
+                    else -> "No se pudieron obtener los horarios."
+                }
+            } finally {
+                if (horariosJob === currentJob) {
+                    loadingHorarios = false
+                    horariosJob = null
+                }
             }
-            expandedDays.clear()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            horarioMateria = null
-            error = when (e) {
-                is IOException -> "Error de red al obtener horarios."
-                else -> "No se pudieron obtener los horarios."
-            }
-        } finally {
-            loadingHorarios = false
         }
     }
 
@@ -197,14 +224,17 @@ fun HorariosScreen(
                     icon = Icons.Default.Refresh,
                     contentDescription = "Refrescar horarios",
                     enabled = selectedMateria != null && !loadingHorarios,
-                    onClick = { scope.launch { loadHorarios() } }
+                    onClick = { loadHorarios() }
                 )
             )
         )
     }
 
     DisposableEffect(Unit) {
-        onDispose { onHeaderActionsChange(emptyList()) }
+        onDispose {
+            cancelHorariosLoad()
+            onHeaderActionsChange(emptyList())
+        }
     }
 
     Column(
@@ -219,8 +249,7 @@ fun HorariosScreen(
                 if (isExpanded && selectedMateria != null) {
                     selectedMateria = null
                     materiaQuery = ""
-                    horarioMateria = null
-                    error = null
+                    resetHorariosState()
                 }
                 dropdownExpanded = isExpanded
             },
@@ -232,7 +261,7 @@ fun HorariosScreen(
                     materiaQuery = it
                     if (selectedMateria?.nombre?.trim() != it.trim()) {
                         selectedMateria = null
-                        horarioMateria = null
+                        resetHorariosState()
                     }
                 },
                 label = { Text("Seleccionar materia") },
@@ -284,9 +313,8 @@ fun HorariosScreen(
                 onClick = {
                     selectedMateria = null
                     materiaQuery = ""
-                    horarioMateria = null
                     dropdownExpanded = false
-                    error = null
+                    resetHorariosState()
                 }
             ) {
                 Text("Quitar filtro")
