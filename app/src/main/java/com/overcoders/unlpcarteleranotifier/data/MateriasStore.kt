@@ -6,8 +6,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.overcoders.unlpcarteleranotifier.model.MateriaCatalogItem
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -22,27 +22,17 @@ object MateriasStore {
         return context.materiasDataStore.data.map { prefs ->
             val json = prefs[MATERIAS_JSON_KEY].orEmpty()
             if (json.isBlank()) emptyList() else decode(json)
-                // TODO: Eliminar esta migración cuando ya no exista cache vieja en usuarios actualizados.
-                .map { it.withFriendlyTermName() }
         }
     }
 
     suspend fun load(context: Context): List<MateriaCatalogItem> {
-        val prefs = context.materiasDataStore.data   // Flow<Preferences>
-
-        val p = prefs.first()                        // Preferences
-        val json = p[MATERIAS_JSON_KEY].orEmpty()
+        val prefs = context.materiasDataStore.data
+        val storedPrefs = prefs.first()
+        val json = storedPrefs[MATERIAS_JSON_KEY].orEmpty()
 
         if (json.isBlank()) return emptyList()
 
-        val materias = decode(json)
-        // TODO: Eliminar esta migración cuando ya no exista cache con sufijos viejos en usuarios actualizados.
-        val formatted = materias.map { it.withFriendlyTermName() }
-        if (formatted != materias) {
-            save(context, formatted)
-        }
-
-        return formatted
+        return decode(json)
     }
 
     suspend fun save(context: Context, materias: List<MateriaCatalogItem>) {
@@ -58,7 +48,6 @@ object MateriasStore {
             prefs.remove(MATERIAS_JSON_KEY)
         }
     }
-
 
     private fun encode(materias: List<MateriaCatalogItem>): String {
         val arr = JSONArray()

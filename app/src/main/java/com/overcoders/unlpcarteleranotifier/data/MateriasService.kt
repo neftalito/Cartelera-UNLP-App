@@ -17,13 +17,8 @@ class MateriasService(
      */
     suspend fun loadOrFetch(context: Context): List<MateriaCatalogItem> {
         val cached = MateriasStore.load(context)
-        // TODO: Eliminar esta migración cuando ya no exista cache vieja en usuarios actualizados.
         if (cached.isNotEmpty()) {
-            val formatted = cached.map { it.withFriendlyTermName() }
-            if (formatted != cached) {
-                MateriasStore.save(context, formatted)
-            }
-            return formatted
+            return cached
         }
 
         val fetched = fetchAndParse()
@@ -71,5 +66,4 @@ class MateriasService(
                 .sortedBy { it.nombre.lowercase() }
         }
     }
-
 }

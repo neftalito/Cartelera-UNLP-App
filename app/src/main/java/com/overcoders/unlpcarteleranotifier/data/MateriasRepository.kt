@@ -23,15 +23,7 @@ object MateriasRepository {
         return mutex.withLock {
             if (cachedIdToName.isNotEmpty()) return cachedIdToName
 
-            // TODO: Eliminar esta migración cuando ya no exista cache vieja en usuarios actualizados.
-            val storedMaterias = MateriasStore.load(context)
-            val materias = if (storedMaterias.isNotEmpty()) {
-                val formatted = storedMaterias.map { it.withFriendlyTermName() }
-                if (formatted != storedMaterias) {
-                    MateriasStore.save(context, formatted)
-                }
-                formatted
-            } else {
+            val materias = MateriasStore.load(context).ifEmpty {
                 MateriasService().loadOrFetch(context)
             }
 
@@ -60,5 +52,4 @@ object MateriasRepository {
             .replace("[\\s\\u00A0]+".toRegex(), " ")
             .trim()
     }
-
 }
