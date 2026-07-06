@@ -15,6 +15,10 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.UNLPCarteleraNotifier">
+        <meta-data
+            android:name="firebase_messaging_installation_id_enabled"
+            android:value="true" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -26,6 +30,9 @@
             </intent-filter>
         </activity>
 
+        <!-- Compatibilidad transitoria: este receiver solo existe para cancelar trabajos
+             legacy restaurados por el sistema. Cuando se elimine el stack viejo de polling,
+             este bloque también debería borrarse. -->
         <receiver
             android:name=".worker.BootReceiver"
             android:exported="true"

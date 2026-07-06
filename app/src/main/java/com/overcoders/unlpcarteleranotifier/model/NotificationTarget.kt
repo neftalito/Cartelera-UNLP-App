@@ -15,3 +15,10 @@ data class CursadaNotificationTarget(
     val materia: String,
     val fechaModificacion: String
 )
+
+data class AvisoNotificationTarget(
+    val titulo: String,
+    val mensaje: String,
+    val autor: String,
+    val fecha: String
+)

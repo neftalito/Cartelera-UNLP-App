@@ -3,6 +3,7 @@
 package com.overcoders.unlpcarteleranotifier.ui
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
 import android.os.PowerManager
 import android.provider.Settings
@@ -61,11 +62,16 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.overcoders.unlpcarteleranotifier.BuildConfig
 import com.overcoders.unlpcarteleranotifier.HeaderAction
 import com.overcoders.unlpcarteleranotifier.R
+import com.overcoders.unlpcarteleranotifier.data.MateriasStore
 import com.overcoders.unlpcarteleranotifier.data.SettingsStore
+import com.overcoders.unlpcarteleranotifier.data.SubscripcionesStore
+import com.overcoders.unlpcarteleranotifier.model.AvisoNotificationTarget
 import com.overcoders.unlpcarteleranotifier.model.CarteleraNotificationTarget
 import com.overcoders.unlpcarteleranotifier.model.CursadaNotificationTarget
 import com.overcoders.unlpcarteleranotifier.push.FirebaseClientConfig
+import com.overcoders.unlpcarteleranotifier.push.FirebaseDebugPushService
 import com.overcoders.unlpcarteleranotifier.push.FirebaseTopics
+import com.overcoders.unlpcarteleranotifier.push.FirebaseTopicSyncManager
 import com.overcoders.unlpcarteleranotifier.push.PushNotificationDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -100,6 +106,10 @@ fun AjustesScreen(
     val scrollState = rememberScrollState()
     val firebaseConfigured = remember { FirebaseClientConfig.isConfigured() }
     val firebaseServerConfigured = remember { FirebaseClientConfig.isServerConfigured() }
+    var syncedTopics by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var lastSyncedInstallationId by remember { mutableStateOf("") }
+    var debugPushStatus by remember { mutableStateOf<String?>(null) }
+    var debugActionRunning by remember { mutableStateOf(false) }
     val notifyAllHighlightColor by animateColorAsState(
         targetValue = if (showNotifyAllHighlight) {
             MaterialTheme.colorScheme.secondary.copy(alpha = 0.20f)
@@ -108,6 +118,11 @@ fun AjustesScreen(
         },
         label = "notifyAllHighlightColor"
     )
+
+    suspend fun refreshDebugPushState() {
+        syncedTopics = SettingsStore.getLastSyncedFirebaseTopics(context)
+        lastSyncedInstallationId = SettingsStore.getLastSyncedFirebaseInstallationId(context)
+    }
 
     DisposableEffect(Unit) {
         onHeaderActionsChange(emptyList())
@@ -118,6 +133,9 @@ fun AjustesScreen(
         withContext(Dispatchers.IO) {
             SettingsStore.notifyAllFlow(context).first()
             SettingsStore.hideCancelledMateriasMessagesFlow(context).first()
+        }
+        if (BuildConfig.DEBUG) {
+            refreshDebugPushState()
         }
         areSettingsLoaded = true
     }
@@ -180,30 +198,35 @@ fun AjustesScreen(
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Notificaciones push", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        text = "Ahora la app recibe avisos por Firebase Cloud Messaging. " +
-                            "El servidor consulta cartelera y cursadas una sola vez, detecta cambios " +
-                            "y los publica en el topico general o en el topico de cada materia.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = if (firebaseConfigured) {
-                            "Firebase esta configurado en esta instalacion."
-                        } else {
-                            "Firebase todavia usa valores de ejemplo. Completa private-local.properties para activar el push real."
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (firebaseConfigured) {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        } else {
-                            MaterialTheme.colorScheme.error
-                        }
-                    )
                     if (BuildConfig.DEBUG) {
+                        Text("Notificaciones push", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            text = "Topico general: ${FirebaseTopics.ALL_MATERIAS}",
+                            text = "Ahora la app recibe avisos por Firebase Cloud Messaging. " +
+                                "El servidor consulta cartelera y cursadas una sola vez, detecta cambios " +
+                                "y los publica en el tópico general, en el tópico de cada materia " +
+                                "o en el tópico global de avisos.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = if (firebaseConfigured) {
+                                "Firebase está configurado en esta instalación."
+                            } else {
+                                "Firebase todavía usa valores de ejemplo. Completa private-local.properties para activar el push real."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (firebaseConfigured) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.error
+                            }
+                        )
+                        Text(
+                            text = "Tópico general: ${FirebaseTopics.ALL_MATERIAS}",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Text(
+                            text = "Tópico avisos: ${FirebaseTopics.AVISOS}",
                             style = MaterialTheme.typography.bodySmall
                         )
                         Text(
@@ -214,9 +237,22 @@ fun AjustesScreen(
                             },
                             style = MaterialTheme.typography.bodySmall
                         )
+                        Text(
+                            text = if (syncedTopics.isEmpty()) {
+                                "Topics sincronizados: todavía no hay ninguno persistido."
+                            } else {
+                                "Topics sincronizados: ${syncedTopics.sorted().joinToString()}"
+                            },
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        if (lastSyncedInstallationId.isNotBlank()) {
+                            Text(
+                                text = "Installation ID: $lastSyncedInstallationId",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        HorizontalDivider()
                     }
-
-                    HorizontalDivider()
 
                     Column(
                         modifier = Modifier
@@ -251,7 +287,7 @@ fun AjustesScreen(
                             colors = SwitchDefaults.colors()
                         )
                         Text(
-                            text = "Si desactivas esta opcion, esta instalacion solo quedara suscripta a las materias elegidas en la pestana de subscripciones.",
+                            text = "Si desactivás esta opción, vas a poder suscribirte a materias específicas desde la pestaña de Subscripciones.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -271,7 +307,7 @@ fun AjustesScreen(
                             colors = SwitchDefaults.colors()
                         )
                         Text(
-                            text = "Este filtro sigue afectando solo la visualizacion dentro de la app.",
+                            text = "Si habilitás esta opción, la cartelera ocultará los mensajes anulados para que solo veas los mensajes válidos.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -280,25 +316,25 @@ fun AjustesScreen(
                     HorizontalDivider()
 
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Bateria")
+                        Text("Batería")
                         val batteryText = if (isIgnoringBatteryOptimizations) {
                             buildAnnotatedString {
                                 withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                                    append("La optimizacion de bateria ya esta desactivada para esta app.")
+                                    append("La optimización de batería ya está desactivada para esta app.")
                                 }
                                 append("\n")
                                 append(
-                                    "Eso ayuda a que Android no limite la entrega de push o la apertura de la app en segundo plano."
+                                    "Esto ayuda a que Android no limite la entrega de notificaciones push en segundo plano."
                                 )
                             }
                         } else {
                             buildAnnotatedString {
                                 withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                                    append("Conviene permitir uso sin restricciones.")
+                                    append("La optimización de batería está activada. Conviene permitir uso sin restricciones.")
                                 }
                                 append("\n")
                                 append(
-                                    "En algunos equipos las notificaciones push llegan tarde si el sistema ahorra bateria agresivamente."
+                                    "En algunos dispositivos las notificaciones push llegan tarde si esto está activado."
                                 )
                             }
                         }
@@ -309,7 +345,7 @@ fun AjustesScreen(
                         )
 
                         val buttonLabel = if (isIgnoringBatteryOptimizations) {
-                            "Abrir ajustes de bateria"
+                            "Abrir ajustes de batería"
                         } else {
                             "Permitir uso sin restricciones"
                         }
@@ -345,6 +381,79 @@ fun AjustesScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text("Debug", style = MaterialTheme.typography.titleMedium)
+                        if (debugPushStatus != null) {
+                            Text(
+                                text = debugPushStatus.orEmpty(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (debugPushStatus?.startsWith("Error") == true) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                        }
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    debugActionRunning = true
+                                    debugPushStatus = null
+                                    try {
+                                        FirebaseTopicSyncManager.register(context)
+                                        FirebaseTopicSyncManager.sync(context)
+                                        refreshDebugPushState()
+                                        debugPushStatus = if (syncedTopics.isEmpty()) {
+                                            "Topics sincronizados, pero todavía no quedó ninguno guardado."
+                                        } else {
+                                            "Topics sincronizados: ${syncedTopics.sorted().joinToString()}."
+                                        }
+                                    } catch (e: Exception) {
+                                        debugPushStatus =
+                                            "Error al sincronizar topics: ${e.userFacingMessage()}"
+                                    } finally {
+                                        debugActionRunning = false
+                                    }
+                                }
+                            },
+                            enabled = firebaseConfigured && !debugActionRunning,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Sincronizar topics reales")
+                        }
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    debugActionRunning = true
+                                    debugPushStatus = null
+                                    try {
+                                        FirebaseTopicSyncManager.register(context)
+                                        FirebaseTopicSyncManager.sync(context)
+                                        refreshDebugPushState()
+                                        val target = withContext(Dispatchers.IO) {
+                                            resolveDebugMateriaTarget(context)
+                                        }
+                                        val result = FirebaseDebugPushService.sendTestPush(
+                                            pushType = FirebaseDebugPushService.PushType.CARTELERA,
+                                            target = FirebaseDebugPushService.Target.GENERAL,
+                                            materiaId = target.id,
+                                            materia = target.nombre,
+                                        )
+                                        debugPushStatus =
+                                            "$result Materia usada: ${target.nombre} (${target.id})."
+                                    } catch (e: Exception) {
+                                        debugPushStatus =
+                                            "Error al enviar push general: ${e.userFacingMessage()}"
+                                    } finally {
+                                        debugActionRunning = false
+                                    }
+                                }
+                            },
+                            enabled = firebaseConfigured &&
+                                firebaseServerConfigured &&
+                                !debugActionRunning,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Enviar push real al topic general")
+                        }
                         Button(
                             onClick = {
                                 PushNotificationDispatcher.showCarteleraNotification(
@@ -378,6 +487,22 @@ fun AjustesScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text("Probar push de cursada")
+                        }
+                        Button(
+                            onClick = {
+                                PushNotificationDispatcher.showAvisoNotification(
+                                    context = context,
+                                    target = AvisoNotificationTarget(
+                                        titulo = "Aviso general de prueba",
+                                        mensaje = "Este push prueba el nuevo topic de avisos para todas las instalaciones.",
+                                        autor = "Servidor Firebase",
+                                        fecha = "06/07/2026 01:00"
+                                    )
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Probar push de aviso")
                         }
                     }
                 }
@@ -460,4 +585,43 @@ fun AjustesScreen(
                 .padding(bottom = 8.dp)
         )
     }
+}
+
+private data class DebugMateriaTarget(
+    val id: String,
+    val nombre: String,
+)
+
+private suspend fun resolveDebugMateriaTarget(context: Context): DebugMateriaTarget {
+    val materias = MateriasStore.load(context)
+    val materiasById = materias.associateBy { it.id }
+    val subscribedTarget = SubscripcionesStore.subscripcionesFlow(context)
+        .first()
+        .asSequence()
+        .mapNotNull(materiasById::get)
+        .firstOrNull()
+
+    if (subscribedTarget != null) {
+        return DebugMateriaTarget(
+            id = subscribedTarget.id,
+            nombre = subscribedTarget.nombre,
+        )
+    }
+
+    val cachedTarget = materias.firstOrNull()
+    if (cachedTarget != null) {
+        return DebugMateriaTarget(
+            id = cachedTarget.id,
+            nombre = cachedTarget.nombre,
+        )
+    }
+
+    return DebugMateriaTarget(
+        id = "123",
+        nombre = "Materia de prueba",
+    )
+}
+
+private fun Throwable.userFacingMessage(): String {
+    return message?.takeIf { it.isNotBlank() } ?: "error inesperado"
 }

@@ -153,6 +153,8 @@ class MainActivity : ComponentActivity() {
 
     private fun updateNotificationPayload(intent: Intent?) {
         pendingNotificationMessage.value = mensajeFromIntent(intent)
+        // Nuevo flujo push: si no vino el anuncio legado completo, guardamos sólo el target
+        // mínimo para que la pantalla busque y enfoque el contenido correcto al cargar.
         pendingCarteleraTarget.value = if (pendingNotificationMessage.value == null) {
             PushNotificationDispatcher.carteleraTargetFromIntent(intent)
         } else {
@@ -166,6 +168,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // Compatibilidad transitoria: reconstruye el mensaje completo desde extras del esquema
+    // anterior. Se puede eliminar cuando ya no haga falta abrir notificaciones legacy.
     private fun mensajeFromIntent(intent: Intent?): Mensaje? {
         if (intent == null) return null
         if (
@@ -214,6 +218,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // Compatibilidad transitoria: abre notificaciones viejas de cursadas hasta que ya no
+    // queden pendientes en instalaciones actualizadas.
     private fun cursadaFromIntent(intent: Intent?): CursadaInfo? {
         if (intent == null) return null
         if (
@@ -433,6 +439,11 @@ fun UNLPCarteleraNotifierApp(
     }
 
     LaunchedEffect(notifyAll, subscriptasIds) {
+        // El servidor decide qué push mandar; el cliente sólo mantiene actualizado
+        // el conjunto de topics que representa las preferencias del usuario.
+        // Mientras sigan entrando instalaciones desde versiones previas, este paso
+        // también funciona como migración automática. Cuando toda la base esté en
+        // la versión nueva, esta compatibilidad ya no debería hacer falta.
         FirebaseTopicSyncManager.sync(context)
     }
 

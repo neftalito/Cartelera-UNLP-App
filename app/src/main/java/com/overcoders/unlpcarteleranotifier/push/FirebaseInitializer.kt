@@ -4,6 +4,12 @@ import android.content.Context
 import android.util.Log
 import com.google.firebase.FirebaseApp
 
+/**
+ * Inicializa Firebase manualmente desde `BuildConfig`.
+ *
+ * Esto desacopla la app de `google-services.json` y permite que el repo conserve valores
+ * de ejemplo mientras cada instalación inyecta su configuración privada local.
+ */
 object FirebaseInitializer {
     private const val TAG = "FirebaseInitializer"
 

@@ -3,14 +3,16 @@ package com.overcoders.unlpcarteleranotifier.worker
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import com.overcoders.unlpcarteleranotifier.data.SettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /**
- * Reprograma los trabajos periódicos después de un reinicio del dispositivo o de una
- * actualización del paquete, escenarios donde la planificación previa puede perderse.
+ * Mantiene la misma estrategia de compatibilidad que `Application`: ante reinicios o updates,
+ * se asegura de que no reaparezcan trabajos del polling local ya reemplazado por FCM.
+ *
+ * Este receiver existe sólo por la migración. Cuando el stack legacy se elimine de verdad,
+ * debería desaparecer junto con `cancelLegacyPolling`.
  */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -22,8 +24,8 @@ class BootReceiver : BroadcastReceiver() {
             return
         }
 
-        // El receiver debe liberar rápido el hilo principal. Continuamos la lectura de
-        // preferencias y la reprogramación en segundo plano y cerramos con finish().
+        // El receiver debe liberar rápido el hilo principal. Cancelamos en segundo plano
+        // por si el sistema restauró trabajos viejos al reinstalar o actualizar el paquete.
         val pendingResult = goAsync()
 
         CoroutineScope(Dispatchers.IO).launch {

@@ -12,11 +12,16 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.overcoders.unlpcarteleranotifier.MainActivity
 import com.overcoders.unlpcarteleranotifier.R
+import com.overcoders.unlpcarteleranotifier.model.AvisoNotificationTarget
 import com.overcoders.unlpcarteleranotifier.model.CarteleraNotificationTarget
 import com.overcoders.unlpcarteleranotifier.model.CursadaNotificationTarget
 import com.overcoders.unlpcarteleranotifier.worker.NotificationHelper
 import com.overcoders.unlpcarteleranotifier.worker.NotificationHelper.CHANNEL_ID
 
+/**
+ * Convierte payloads push en notificaciones del sistema y también reconstruye el target
+ * mínimo desde los intents de apertura.
+ */
 object PushNotificationDispatcher {
     private const val EXTRA_PUSH_TYPE = "extra_push_type"
     private const val TYPE_CARTELERA = "push_cartelera"
@@ -52,6 +57,33 @@ object PushNotificationDispatcher {
                     )
                 )
                 .setContentIntent(carteleraPendingIntent(context, target))
+                .setAutoCancel(true)
+                .build()
+        )
+    }
+
+    @SuppressLint("MissingPermission")
+    fun showAvisoNotification(
+        context: Context,
+        target: AvisoNotificationTarget
+    ) {
+        if (!canPostNotifications(context)) return
+
+        NotificationHelper.ensureChannel(context)
+        NotificationManagerCompat.from(context).notify(
+            avisoNotificationId(target),
+            NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(target.titulo)
+                .setContentText(target.autor.ifBlank { "Aviso general" })
+                .setStyle(
+                    NotificationCompat.BigTextStyle().bigText(
+                        target.mensaje.ifBlank {
+                            "Tenés un nuevo aviso general."
+                        }
+                    )
+                )
+                .setContentIntent(avisoPendingIntent(context))
                 .setAutoCancel(true)
                 .build()
         )
@@ -117,6 +149,7 @@ object PushNotificationDispatcher {
         target: CarteleraNotificationTarget
     ): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
+            // Guardamos sólo un target liviano para no depender del límite de tamaño de FCM.
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra(EXTRA_PUSH_TYPE, TYPE_CARTELERA)
             putExtra(EXTRA_MATERIA_ID, target.materiaId)
@@ -140,6 +173,7 @@ object PushNotificationDispatcher {
         target: CursadaNotificationTarget
     ): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
+            // La pantalla resuelve el detalle final una vez que vuelve a cargar su snapshot.
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra(EXTRA_PUSH_TYPE, TYPE_CURSADA)
             putExtra(EXTRA_MATERIA_ID, target.materiaId)
@@ -154,12 +188,28 @@ object PushNotificationDispatcher {
         )
     }
 
+    private fun avisoPendingIntent(context: Context): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        return PendingIntent.getActivity(
+            context,
+            AVISO_REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
     private fun carteleraNotificationId(target: CarteleraNotificationTarget): Int {
         return (target.materia + target.titulo + target.fecha + target.autor).hashCode()
     }
 
     private fun cursadaNotificationId(target: CursadaNotificationTarget): Int {
         return (target.materia + target.fechaModificacion).hashCode()
+    }
+
+    private fun avisoNotificationId(target: AvisoNotificationTarget): Int {
+        return (target.titulo + target.mensaje + target.autor + target.fecha).hashCode()
     }
 
     private fun canPostNotifications(context: Context): Boolean {
@@ -172,4 +222,6 @@ object PushNotificationDispatcher {
             Process.myUid()
         ) == PackageManager.PERMISSION_GRANTED
     }
+
+    private const val AVISO_REQUEST_CODE = 10_001
 }

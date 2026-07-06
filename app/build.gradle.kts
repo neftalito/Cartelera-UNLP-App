@@ -23,15 +23,16 @@ fun String.asBuildConfigString(): String {
 android {
     namespace = "com.overcoders.unlpcarteleranotifier"
     compileSdk {
-        version = release(36)
+        version = release(37)
     }
 
     defaultConfig {
         applicationId = "com.overcoders.unlpcarteleranotifier"
         minSdk = 23
+        //noinspection OldTargetApi
         targetSdk = 36
         versionCode = 20
-        versionName = "1.2.1"
+        versionName = "2.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -58,14 +59,31 @@ android {
         buildConfigField(
             "String",
             "FIREBASE_SERVER_BASE_URL",
-            privateProperty(
-                "firebase.serverBaseUrl",
-                "https://your-firebase-sync-server.example.com"
-            ).asBuildConfigString()
+            "\"\""
+        )
+        buildConfigField(
+            "String",
+            "FIREBASE_SERVER_API_TOKEN",
+            "\"\""
         )
     }
 
     buildTypes {
+        debug {
+            buildConfigField(
+                "String",
+                "FIREBASE_SERVER_BASE_URL",
+                privateProperty(
+                    "firebase.serverBaseUrl",
+                    "https://your-firebase-sync-server.example.com"
+                ).asBuildConfigString()
+            )
+            buildConfigField(
+                "String",
+                "FIREBASE_SERVER_API_TOKEN",
+                privateProperty("firebase.serverApiToken", "").asBuildConfigString()
+            )
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -106,7 +124,10 @@ dependencies {
     implementation(libs.jsoup)
     implementation(libs.firebase.messaging)
     implementation(libs.androidx.datastore.preferences)
+    // Compatibilidad transitoria: hoy WorkManager solo queda para cancelar trabajos legacy.
+    // Cuando se eliminen `BootReceiver` y `cancelLegacyPolling`, esta dependencia debería salir.
     implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.fragment.ktx)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
