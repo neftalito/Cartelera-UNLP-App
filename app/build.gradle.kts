@@ -1,6 +1,23 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+}
+
+val privateLocalProperties = Properties().apply {
+    val privateFile = rootProject.file("private-local.properties")
+    if (privateFile.exists()) {
+        privateFile.inputStream().use { load(it) }
+    }
+}
+
+fun privateProperty(name: String, defaultValue: String): String {
+    return privateLocalProperties.getProperty(name, defaultValue)
+}
+
+fun String.asBuildConfigString(): String {
+    return "\"${replace("\\", "\\\\").replace("\"", "\\\"")}\""
 }
 
 android {
@@ -17,6 +34,35 @@ android {
         versionName = "1.2.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField(
+            "String",
+            "FIREBASE_PROJECT_ID",
+            privateProperty("firebase.projectId", "example-cartelera-project").asBuildConfigString()
+        )
+        buildConfigField(
+            "String",
+            "FIREBASE_APPLICATION_ID",
+            privateProperty("firebase.applicationId", "1:1234567890:android:exampleapp123456").asBuildConfigString()
+        )
+        buildConfigField(
+            "String",
+            "FIREBASE_API_KEY",
+            privateProperty("firebase.apiKey", "example-android-api-key").asBuildConfigString()
+        )
+        buildConfigField(
+            "String",
+            "FIREBASE_GCM_SENDER_ID",
+            privateProperty("firebase.gcmSenderId", "1234567890").asBuildConfigString()
+        )
+        buildConfigField(
+            "String",
+            "FIREBASE_SERVER_BASE_URL",
+            privateProperty(
+                "firebase.serverBaseUrl",
+                "https://your-firebase-sync-server.example.com"
+            ).asBuildConfigString()
+        )
     }
 
     buildTypes {
@@ -58,6 +104,7 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.okhttp)
     implementation(libs.jsoup)
+    implementation(libs.firebase.messaging)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.work.runtime.ktx)
     testImplementation(libs.junit)

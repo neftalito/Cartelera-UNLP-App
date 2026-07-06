@@ -69,9 +69,14 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import com.overcoders.unlpcarteleranotifier.data.SettingsStore
+import com.overcoders.unlpcarteleranotifier.data.SubscripcionesStore
 import com.overcoders.unlpcarteleranotifier.model.Adjunto
+import com.overcoders.unlpcarteleranotifier.model.CarteleraNotificationTarget
 import com.overcoders.unlpcarteleranotifier.model.CursadaInfo
+import com.overcoders.unlpcarteleranotifier.model.CursadaNotificationTarget
 import com.overcoders.unlpcarteleranotifier.model.Mensaje
+import com.overcoders.unlpcarteleranotifier.push.FirebaseTopicSyncManager
+import com.overcoders.unlpcarteleranotifier.push.PushNotificationDispatcher
 import com.overcoders.unlpcarteleranotifier.ui.AjustesScreen
 import com.overcoders.unlpcarteleranotifier.ui.AulasScreen
 import com.overcoders.unlpcarteleranotifier.ui.CursadasScreen
@@ -81,7 +86,6 @@ import com.overcoders.unlpcarteleranotifier.ui.SubscripcionesScreen
 import com.overcoders.unlpcarteleranotifier.ui.theme.UNLPCarteleraNotifierTheme
 import com.overcoders.unlpcarteleranotifier.worker.CursadasNotificationDispatcher
 import com.overcoders.unlpcarteleranotifier.worker.NotificationDispatcher
-import com.overcoders.unlpcarteleranotifier.worker.WorkScheduler
 import org.json.JSONArray
 
 /**
@@ -95,7 +99,9 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { }
     private val pendingNotificationMessage = mutableStateOf<Mensaje?>(null)
+    private val pendingCarteleraTarget = mutableStateOf<CarteleraNotificationTarget?>(null)
     private val pendingCursadaNotification = mutableStateOf<CursadaInfo?>(null)
+    private val pendingCursadaTarget = mutableStateOf<CursadaNotificationTarget?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -104,12 +110,18 @@ class MainActivity : ComponentActivity() {
         setContent {
             UNLPCarteleraNotifierTheme {
                 val message by pendingNotificationMessage
+                val carteleraTarget by pendingCarteleraTarget
                 val cursada by pendingCursadaNotification
+                val cursadaTarget by pendingCursadaTarget
                 UNLPCarteleraNotifierApp(
                     initialNotificationMessage = message,
+                    initialCarteleraTarget = carteleraTarget,
                     initialCursada = cursada,
+                    initialCursadaTarget = cursadaTarget,
                     onNotificationMessageConsumed = { pendingNotificationMessage.value = null },
-                    onCursadaConsumed = { pendingCursadaNotification.value = null }
+                    onCarteleraTargetConsumed = { pendingCarteleraTarget.value = null },
+                    onCursadaConsumed = { pendingCursadaNotification.value = null },
+                    onCursadaTargetConsumed = { pendingCursadaTarget.value = null }
                 )
             }
         }
@@ -141,7 +153,17 @@ class MainActivity : ComponentActivity() {
 
     private fun updateNotificationPayload(intent: Intent?) {
         pendingNotificationMessage.value = mensajeFromIntent(intent)
+        pendingCarteleraTarget.value = if (pendingNotificationMessage.value == null) {
+            PushNotificationDispatcher.carteleraTargetFromIntent(intent)
+        } else {
+            null
+        }
         pendingCursadaNotification.value = cursadaFromIntent(intent)
+        pendingCursadaTarget.value = if (pendingCursadaNotification.value == null) {
+            PushNotificationDispatcher.cursadaTargetFromIntent(intent)
+        } else {
+            null
+        }
     }
 
     private fun mensajeFromIntent(intent: Intent?): Mensaje? {
@@ -224,9 +246,13 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun UNLPCarteleraNotifierApp(
     initialNotificationMessage: Mensaje? = null,
+    initialCarteleraTarget: CarteleraNotificationTarget? = null,
     initialCursada: CursadaInfo? = null,
+    initialCursadaTarget: CursadaNotificationTarget? = null,
     onNotificationMessageConsumed: () -> Unit = {},
-    onCursadaConsumed: () -> Unit = {}
+    onCarteleraTargetConsumed: () -> Unit = {},
+    onCursadaConsumed: () -> Unit = {},
+    onCursadaTargetConsumed: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.CARTELERA) }
@@ -256,14 +282,9 @@ fun UNLPCarteleraNotifierApp(
             }
         )
     ) { mutableStateListOf<NavigationState>() }
-    val interval by SettingsStore.intervalFlow(context).collectAsState(initial = 30)
-    val materiasAutoCheck by SettingsStore.materiasAutoCheckEnabledFlow(context)
-        .collectAsState(initial = true)
+    val subscriptasIds by SubscripcionesStore.subscripcionesFlow(context)
+        .collectAsState(initial = emptySet())
     val notifyAll by SettingsStore.notifyAllFlow(context).collectAsState(initial = true)
-    val wifiOnly by SettingsStore.wifiOnlyFlow(context).collectAsState(initial = false)
-    val cursadasAutoCheck by SettingsStore.cursadasAutoCheckEnabledFlow(context)
-        .collectAsState(initial = false)
-    val cursadasInterval by SettingsStore.cursadasIntervalFlow(context).collectAsState(initial = 60)
     var showSubscriptionsBlockedDialog by remember { mutableStateOf(false) }
     var showDevelopmentWarningDialog by remember { mutableStateOf(false) }
     var showReviewPromptDialog by remember { mutableStateOf(false) }
@@ -366,8 +387,28 @@ fun UNLPCarteleraNotifierApp(
         }
     }
 
+    LaunchedEffect(initialCarteleraTarget) {
+        if (initialCarteleraTarget != null) {
+            navigateTo(
+                destination = AppDestinations.CARTELERA,
+                category = MainCategory.MATERIAS,
+                addToHistory = false
+            )
+        }
+    }
+
     LaunchedEffect(initialCursada) {
         if (initialCursada != null) {
+            navigateTo(
+                destination = AppDestinations.CURSADAS,
+                category = MainCategory.MATERIAS,
+                addToHistory = false
+            )
+        }
+    }
+
+    LaunchedEffect(initialCursadaTarget) {
+        if (initialCursadaTarget != null) {
             navigateTo(
                 destination = AppDestinations.CURSADAS,
                 category = MainCategory.MATERIAS,
@@ -391,13 +432,8 @@ fun UNLPCarteleraNotifierApp(
         }
     }
 
-    // Reprogramamos automáticamente WorkManager cuando cambian las preferencias relevantes.
-    LaunchedEffect(materiasAutoCheck, interval, wifiOnly) {
-        WorkScheduler.schedule(context, materiasAutoCheck, interval, wifiOnly)
-    }
-
-    LaunchedEffect(cursadasAutoCheck, cursadasInterval, wifiOnly) {
-        WorkScheduler.scheduleCursadas(context, cursadasAutoCheck, cursadasInterval, wifiOnly)
+    LaunchedEffect(notifyAll, subscriptasIds) {
+        FirebaseTopicSyncManager.sync(context)
     }
 
     if (showDevelopmentWarningDialog) {
@@ -792,7 +828,9 @@ fun UNLPCarteleraNotifierApp(
                     when (destination) {
                         AppDestinations.CARTELERA -> MateriasScreen(
                             initialSelected = initialNotificationMessage,
+                            initialTarget = initialCarteleraTarget,
                             onInitialSelectedConsumed = onNotificationMessageConsumed,
+                            onInitialTargetConsumed = onCarteleraTargetConsumed,
                             onTitleChange = { updateTitle(AppDestinations.CARTELERA, it) },
                             onFullscreenDetailChange = {
                                 updateFullscreenDetail(AppDestinations.CARTELERA, it)
@@ -804,7 +842,9 @@ fun UNLPCarteleraNotifierApp(
 
                         AppDestinations.CURSADAS -> CursadasScreen(
                             initialSelected = initialCursada,
+                            initialTarget = initialCursadaTarget,
                             onInitialSelectedConsumed = onCursadaConsumed,
+                            onInitialTargetConsumed = onCursadaTargetConsumed,
                             onTitleChange = { updateTitle(AppDestinations.CURSADAS, it) },
                             onFullscreenDetailChange = {
                                 updateFullscreenDetail(AppDestinations.CURSADAS, it)

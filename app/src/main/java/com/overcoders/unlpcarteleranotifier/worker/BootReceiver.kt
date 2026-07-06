@@ -28,14 +28,7 @@ class BootReceiver : BroadcastReceiver() {
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val materiasEnabled = SettingsStore.materiasAutoCheckEnabled(context)
-                val interval = SettingsStore.getInterval(context)
-                val wifiOnly = SettingsStore.getWifiOnly(context)
-                WorkScheduler.schedule(context, materiasEnabled, interval, wifiOnly)
-
-                val cursadasEnabled = SettingsStore.cursadasAutoCheckEnabled(context)
-                val cursadasInterval = SettingsStore.getCursadasInterval(context)
-                WorkScheduler.scheduleCursadas(context, cursadasEnabled, cursadasInterval, wifiOnly)
+                WorkScheduler.cancelLegacyPolling(context)
             } finally {
                 pendingResult.finish()
             }

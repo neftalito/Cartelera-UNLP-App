@@ -14,3 +14,4 @@ local.properties
 keystore.properties
 key.properties
 google-services.json
+private-local.properties

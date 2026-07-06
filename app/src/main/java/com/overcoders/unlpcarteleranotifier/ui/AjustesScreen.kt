@@ -6,7 +6,6 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.PowerManager
 import android.provider.Settings
-import android.widget.Toast
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,24 +17,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.VolunteerActivism
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -60,7 +52,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
@@ -71,35 +62,22 @@ import com.overcoders.unlpcarteleranotifier.BuildConfig
 import com.overcoders.unlpcarteleranotifier.HeaderAction
 import com.overcoders.unlpcarteleranotifier.R
 import com.overcoders.unlpcarteleranotifier.data.SettingsStore
-import com.overcoders.unlpcarteleranotifier.worker.NotificationDispatcher
+import com.overcoders.unlpcarteleranotifier.model.CarteleraNotificationTarget
+import com.overcoders.unlpcarteleranotifier.model.CursadaNotificationTarget
+import com.overcoders.unlpcarteleranotifier.push.FirebaseClientConfig
+import com.overcoders.unlpcarteleranotifier.push.FirebaseTopics
+import com.overcoders.unlpcarteleranotifier.push.PushNotificationDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private data class IntervalOption(val minutes: Int, val label: String)
-
-private val intervalOptions = listOf(
-    IntervalOption(15, "15 minutos"),
-    IntervalOption(30, "30 minutos"),
-    IntervalOption(60, "1 hora"),
-    IntervalOption(720, "12 horas"),
-    IntervalOption(1440, "24 horas")
-)
-
 private const val bugReportUrl = "https://forms.gle/jLNMnBGWsdQHLM9N8"
 private const val repositoryUrl = "https://github.com/neftalito/Cartelera-UNLP-App"
 private const val cafecitoUrl = "https://cafecito.app/neftalito"
 
-/**
- * Pantalla de configuración operativa de la app.
- *
- * Reúne preferencias persistidas, atajos a permisos relevantes y pequeños estados de soporte
- * que impactan en el comportamiento en segundo plano.
- */
 @SuppressLint("BatteryLife")
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AjustesScreen(
     highlightNotifyAllTrigger: Int = 0,
@@ -108,31 +86,20 @@ fun AjustesScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val powerManager = remember { context.getSystemService(PowerManager::class.java) }
 
-    val interval by SettingsStore.intervalFlow(context).collectAsState(initial = 30)
-    val materiasAutoCheckEnabled by SettingsStore.materiasAutoCheckEnabledFlow(context)
-        .collectAsState(initial = true)
     val notifyAll by SettingsStore.notifyAllFlow(context).collectAsState(initial = true)
-    val wifiOnly by SettingsStore.wifiOnlyFlow(context).collectAsState(initial = false)
     val hideCancelledMateriasMessages by SettingsStore.hideCancelledMateriasMessagesFlow(context)
         .collectAsState(initial = false)
-    val cursadasAutoCheckEnabled by SettingsStore.cursadasAutoCheckEnabledFlow(context)
-        .collectAsState(initial = false)
-    val cursadasInterval by SettingsStore.cursadasIntervalFlow(context).collectAsState(initial = 60)
-    val powerManager = remember {
-        context.getSystemService(PowerManager::class.java)
-    }
-    val lifecycleOwner = LocalLifecycleOwner.current
 
-    var intervalExpanded by remember { mutableStateOf(false) }
-    var cursadasIntervalExpanded by remember { mutableStateOf(false) }
-    var lastTotalText by remember { mutableStateOf("") }
-    var lastSeenTotalText by remember { mutableStateOf("") }
     var isIgnoringBatteryOptimizations by remember { mutableStateOf(false) }
     var showNotifyAllHighlight by remember { mutableStateOf(false) }
     var areSettingsLoaded by remember { mutableStateOf(false) }
 
     val scrollState = rememberScrollState()
+    val firebaseConfigured = remember { FirebaseClientConfig.isConfigured() }
+    val firebaseServerConfigured = remember { FirebaseClientConfig.isServerConfigured() }
     val notifyAllHighlightColor by animateColorAsState(
         targetValue = if (showNotifyAllHighlight) {
             MaterialTheme.colorScheme.secondary.copy(alpha = 0.20f)
@@ -147,33 +114,14 @@ fun AjustesScreen(
         onDispose { onHeaderActionsChange(emptyList()) }
     }
 
-    // Esperamos a tener un snapshot consistente de DataStore antes de pintar la UI completa.
-    // Así evitamos mostrar defaults transitorios y que luego "salten" al valor real guardado.
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            SettingsStore.intervalFlow(context).first()
-            SettingsStore.materiasAutoCheckEnabledFlow(context).first()
             SettingsStore.notifyAllFlow(context).first()
-            SettingsStore.wifiOnlyFlow(context).first()
             SettingsStore.hideCancelledMateriasMessagesFlow(context).first()
-            SettingsStore.cursadasAutoCheckEnabledFlow(context).first()
-            SettingsStore.cursadasIntervalFlow(context).first()
         }
-
         areSettingsLoaded = true
-
-        val lastTotal = withContext(Dispatchers.IO) {
-            SettingsStore.getLastTotal(context)
-        }
-        lastTotalText = lastTotal.toString()
-        val lastSeenTotal = withContext(Dispatchers.IO) {
-            SettingsStore.getLastSeenTotal(context)
-        }
-        lastSeenTotalText = lastSeenTotal.toString()
     }
 
-    // Este disparador se usa cuando otra pantalla redirige al usuario a la opción "notify all"
-    // y necesita que quede visualmente resaltada al llegar aquí.
     LaunchedEffect(highlightNotifyAllTrigger) {
         if (highlightNotifyAllTrigger > 0) {
             try {
@@ -184,7 +132,6 @@ fun AjustesScreen(
                 showNotifyAllHighlight = false
                 onHighlightNotifyAllConsumed()
             }
-
         }
     }
 
@@ -196,8 +143,6 @@ fun AjustesScreen(
         }
     }
 
-    // El usuario puede cambiar esta excepción desde ajustes del sistema; la refrescamos al volver
-    // a la app para reflejar el estado real sin requerir un reinicio manual.
     DisposableEffect(lifecycleOwner, powerManager) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME && powerManager != null) {
@@ -235,7 +180,43 @@ fun AjustesScreen(
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Notificaciones", style = MaterialTheme.typography.titleMedium)
+                    Text("Notificaciones push", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = "Ahora la app recibe avisos por Firebase Cloud Messaging. " +
+                            "El servidor consulta cartelera y cursadas una sola vez, detecta cambios " +
+                            "y los publica en el topico general o en el topico de cada materia.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = if (firebaseConfigured) {
+                            "Firebase esta configurado en esta instalacion."
+                        } else {
+                            "Firebase todavia usa valores de ejemplo. Completa private-local.properties para activar el push real."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (firebaseConfigured) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        }
+                    )
+                    if (BuildConfig.DEBUG) {
+                        Text(
+                            text = "Topico general: ${FirebaseTopics.ALL_MATERIAS}",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Text(
+                            text = if (firebaseServerConfigured) {
+                                "Servidor: ${FirebaseClientConfig.serverBaseUrl}"
+                            } else {
+                                "Servidor: URL de ejemplo"
+                            },
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+
+                    HorizontalDivider()
 
                     Column(
                         modifier = Modifier
@@ -270,7 +251,7 @@ fun AjustesScreen(
                             colors = SwitchDefaults.colors()
                         )
                         Text(
-                            text = "Si desactivás esta opción, sólo vas a recibir notificaciones de las materias a las que estás suscrito.",
+                            text = "Si desactivas esta opcion, esta instalacion solo quedara suscripta a las materias elegidas en la pestana de subscripciones.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -279,147 +260,7 @@ fun AjustesScreen(
                     HorizontalDivider()
 
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Chequeo automático de cartelera")
-                        Switch(
-                            checked = materiasAutoCheckEnabled,
-                            onCheckedChange = { enabled ->
-                                scope.launch(Dispatchers.IO) {
-                                    SettingsStore.setMateriasAutoCheckEnabled(context, enabled)
-                                }
-                            },
-                            colors = SwitchDefaults.colors()
-                        )
-                    }
-
-                    if (materiasAutoCheckEnabled) {
-                        ExposedDropdownMenuBox(
-                            expanded = intervalExpanded,
-                            onExpandedChange = { intervalExpanded = !intervalExpanded },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            val selectedLabel = intervalOptions
-                                .firstOrNull { it.minutes == interval }
-                                ?.label
-                                ?: "$interval minutos"
-                            OutlinedTextField(
-                                value = selectedLabel,
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text("Intervalo para la cartelera") },
-                                trailingIcon = {
-                                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = intervalExpanded)
-                                },
-                                modifier = Modifier
-                                    .menuAnchor(
-                                        ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                                        enabled = true
-                                    )
-                                    .fillMaxWidth()
-                            )
-
-                            ExposedDropdownMenu(
-                                expanded = intervalExpanded,
-                                onDismissRequest = { intervalExpanded = false }
-                            ) {
-                                intervalOptions.forEach { option ->
-                                    DropdownMenuItem(
-                                        text = { Text(option.label) },
-                                        onClick = {
-                                            intervalExpanded = false
-                                            if (option.minutes != interval) {
-                                                scope.launch(Dispatchers.IO) {
-                                                    SettingsStore.setInterval(context, option.minutes)
-                                                }
-                                            }
-                                        }
-                                    )
-                                }
-                            }
-                        }
-
-                        Text(
-                            text = "Nota: a menor intervalo, mayor es el consumo de batería y datos.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 6.dp)
-                        )
-                    }
-
-                    HorizontalDivider()
-
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Chequeo automático de cursadas")
-                        Switch(
-                            checked = cursadasAutoCheckEnabled,
-                            onCheckedChange = { enabled ->
-                                scope.launch(Dispatchers.IO) {
-                                    SettingsStore.setCursadasAutoCheckEnabled(context, enabled)
-                                }
-                            },
-                            colors = SwitchDefaults.colors()
-                        )
-                    }
-
-                    if (cursadasAutoCheckEnabled) {
-                        ExposedDropdownMenuBox(
-                            expanded = cursadasIntervalExpanded,
-                            onExpandedChange = { cursadasIntervalExpanded = !cursadasIntervalExpanded },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            val selectedLabel = intervalOptions
-                                .firstOrNull { it.minutes == cursadasInterval }
-                                ?.label
-                                ?: "$cursadasInterval minutos"
-                            OutlinedTextField(
-                                value = selectedLabel,
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text("Intervalo para las cursadas") },
-                                trailingIcon = {
-                                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = cursadasIntervalExpanded)
-                                },
-                                modifier = Modifier
-                                    .menuAnchor(
-                                        ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                                        enabled = true
-                                    )
-                                    .fillMaxWidth()
-                            )
-
-                            ExposedDropdownMenu(
-                                expanded = cursadasIntervalExpanded,
-                                onDismissRequest = { cursadasIntervalExpanded = false }
-                            ) {
-                                intervalOptions.forEach { option ->
-                                    DropdownMenuItem(
-                                        text = { Text(option.label) },
-                                        onClick = {
-                                            cursadasIntervalExpanded = false
-                                            if (option.minutes != cursadasInterval) {
-                                                scope.launch(Dispatchers.IO) {
-                                                    SettingsStore.setCursadasInterval(context, option.minutes)
-                                                }
-                                            }
-                                        }
-                                    )
-                                }
-                            }
-                        }
-
-                        Text(
-                            text = "Nota: a menor intervalo, mayor es el consumo de batería y datos.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 6.dp)
-                        )
-                    }
-
-                    HorizontalDivider()
-
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Ocultar mensajes anulados en cartelera")
-                        // Con este filtro puede aparecer el badge "Nuevo" en anuncios que no serían nuevos
-                        // Como es un problema meramente visual y de bajo impacto, no planeo arreglarlo.
                         Switch(
                             checked = hideCancelledMateriasMessages,
                             onCheckedChange = { enabled ->
@@ -429,24 +270,8 @@ fun AjustesScreen(
                             },
                             colors = SwitchDefaults.colors()
                         )
-                    }
-
-                    HorizontalDivider()
-
-
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Ahorro de datos (solo Wi-Fi)")
-                        Switch(
-                            checked = wifiOnly,
-                            onCheckedChange = { enabled ->
-                                scope.launch(Dispatchers.IO) {
-                                    SettingsStore.setWifiOnly(context, enabled)
-                                }
-                            },
-                            colors = SwitchDefaults.colors()
-                        )
                         Text(
-                            text = "Si está activado, la app solo consultará novedades y enviará notificaciones cuando estés conectado a Wi-Fi.",
+                            text = "Este filtro sigue afectando solo la visualizacion dentro de la app.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -455,74 +280,55 @@ fun AjustesScreen(
                     HorizontalDivider()
 
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Batería")
-                        if (powerManager != null) {
-                            val buttonLabel = if (isIgnoringBatteryOptimizations) {
-                                "Abrir ajustes de batería"
-                            } else {
-                                "Permitir uso sin restricciones"
-                            }
-                            Text(
-                                text = if (isIgnoringBatteryOptimizations) {
-                                    buildAnnotatedString {
-                                        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                                            append("La optimización de batería está desactivada para esta app.")
-                                        }
-                                        append("\n")
-                                        append(
-                                            "Esto es útil para evitar que el sistema cierre el proceso en segundo plano. Si querés volver a activarla, tocá el botón para abrir los ajustes del sistema."
-                                        )
-                                    }
-                                } else {
-                                    buildAnnotatedString {
-                                        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                                            append(
-                                                "Para evitar que el sistema cierre el proceso en segundo plano, habilitá el uso sin restricciones."
-                                            )
-                                        }
-                                        append("\n")
-                                        append(
-                                            "Si las notificaciones no llegan cuando la app está en segundo plano o cerrada y sólo llegan al abrir la app, activá esta opción."
-                                        )
-                                    }
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Button(
-                                onClick = {
-                                    val intent = if (isIgnoringBatteryOptimizations) {
-                                        Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-                                    } else {
-                                        Intent(
-                                            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
-                                        ).apply {
-                                            data = "package:${context.packageName}".toUri()
-                                        }
-                                    }
-                                    context.startActivity(intent)
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(buttonLabel)
+                        Text("Bateria")
+                        val batteryText = if (isIgnoringBatteryOptimizations) {
+                            buildAnnotatedString {
+                                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                                    append("La optimizacion de bateria ya esta desactivada para esta app.")
+                                }
+                                append("\n")
+                                append(
+                                    "Eso ayuda a que Android no limite la entrega de push o la apertura de la app en segundo plano."
+                                )
                             }
                         } else {
-                            Text(
-                                text = "Esta versión de Android no requiere ajustes extra de batería.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Button(
-                                onClick = {
-                                    val intent = Intent(
-                                        Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS
-                                    )
-                                    context.startActivity(intent)
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Abrir ajustes de batería")
+                            buildAnnotatedString {
+                                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                                    append("Conviene permitir uso sin restricciones.")
+                                }
+                                append("\n")
+                                append(
+                                    "En algunos equipos las notificaciones push llegan tarde si el sistema ahorra bateria agresivamente."
+                                )
                             }
+                        }
+                        Text(
+                            text = batteryText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        val buttonLabel = if (isIgnoringBatteryOptimizations) {
+                            "Abrir ajustes de bateria"
+                        } else {
+                            "Permitir uso sin restricciones"
+                        }
+                        Button(
+                            onClick = {
+                                val intent = if (isIgnoringBatteryOptimizations) {
+                                    Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                                } else {
+                                    Intent(
+                                        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+                                    ).apply {
+                                        data = "package:${context.packageName}".toUri()
+                                    }
+                                }
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(buttonLabel)
                         }
                     }
                 }
@@ -539,104 +345,43 @@ fun AjustesScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text("Debug", style = MaterialTheme.typography.titleMedium)
-                        Text("Total anterior")
-                        OutlinedTextField(
-                            value = lastTotalText,
-                            onValueChange = { lastTotalText = it },
-                            label = { Text("Último total") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.fillMaxWidth()
-                        )
                         Button(
                             onClick = {
-                                scope.launch {
-                                    val parsed = lastTotalText.toIntOrNull()
-                                    if (parsed == null) {
-                                        Toast.makeText(
-                                            context,
-                                            "Ingresá un número válido.",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                        return@launch
-                                    }
-                                    withContext(Dispatchers.IO) {
-                                        SettingsStore.setLastTotal(context, parsed)
-                                    }
-                                    Toast.makeText(
-                                        context,
-                                        "Total anterior guardado.",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
+                                PushNotificationDispatcher.showCarteleraNotification(
+                                    context = context,
+                                    target = CarteleraNotificationTarget(
+                                        materiaId = "123",
+                                        materia = "Materia de prueba",
+                                        titulo = "Anuncio de ejemplo",
+                                        fecha = "05/07/2026 21:00",
+                                        autor = "Servidor Firebase",
+                                        resumen = "Este push prueba el flujo nuevo de Firebase y la apertura dirigida hacia la cartelera.",
+                                        isAnulado = false
+                                    )
+                                )
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Guardar total anterior")
+                            Text("Probar push de cartelera")
                         }
                         Button(
                             onClick = {
-                                scope.launch {
-                                    val parsed = lastTotalText.toIntOrNull()
-                                    if (parsed == null) {
-                                        Toast.makeText(
-                                            context,
-                                            "Ingresá un número válido.",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                        return@launch
-                                    }
-                                    withContext(Dispatchers.IO) {
-                                        SettingsStore.setLastTotal(context, parsed)
-                                        NotificationDispatcher.process(context)
-                                    }
-                                    Toast.makeText(
-                                        context,
-                                        "Notificaciones encoladas para debug.",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
+                                PushNotificationDispatcher.showCursadaNotification(
+                                    context = context,
+                                    target = CursadaNotificationTarget(
+                                        materiaId = "123",
+                                        materia = "Materia de prueba",
+                                        fechaModificacion = "05/07/2026 21:00"
+                                    )
+                                )
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Probar notificaciones")
-                        }
-                        HorizontalDivider()
-                        Text("Nuevos anuncios")
-                        OutlinedTextField(
-                            value = lastSeenTotalText,
-                            onValueChange = { lastSeenTotalText = it },
-                            label = { Text("Último total visto") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    val parsed = lastSeenTotalText.toIntOrNull()
-                                    if (parsed == null) {
-                                        Toast.makeText(
-                                            context,
-                                            "Ingresá un número válido.",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                        return@launch
-                                    }
-                                    withContext(Dispatchers.IO) {
-                                        SettingsStore.setLastSeenTotal(context, parsed)
-                                    }
-                                    Toast.makeText(
-                                        context,
-                                        "Valores de vistos guardados.",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Guardar vistos")
+                            Text("Probar push de cursada")
                         }
                     }
                 }
+
                 Spacer(Modifier.height(8.dp))
             }
 
@@ -650,10 +395,7 @@ fun AjustesScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     FilledTonalIconButton(
                         onClick = {
-                            val intent = Intent(
-                                Intent.ACTION_VIEW,
-                                bugReportUrl.toUri()
-                            )
+                            val intent = Intent(Intent.ACTION_VIEW, bugReportUrl.toUri())
                             context.startActivity(intent)
                         }
                     ) {
@@ -672,10 +414,7 @@ fun AjustesScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     FilledTonalIconButton(
                         onClick = {
-                            val intent = Intent(
-                                Intent.ACTION_VIEW,
-                                repositoryUrl.toUri()
-                            )
+                            val intent = Intent(Intent.ACTION_VIEW, repositoryUrl.toUri())
                             context.startActivity(intent)
                         }
                     ) {
@@ -694,10 +433,7 @@ fun AjustesScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     FilledTonalIconButton(
                         onClick = {
-                            val intent = Intent(
-                                Intent.ACTION_VIEW,
-                                cafecitoUrl.toUri()
-                            )
+                            val intent = Intent(Intent.ACTION_VIEW, cafecitoUrl.toUri())
                             context.startActivity(intent)
                         }
                     ) {

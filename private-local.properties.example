@@ -1,0 +1,8 @@
+# Firebase Android client config used by manual FirebaseApp initialization.
+# Rename or copy this file to private-local.properties and replace the example values.
+
+firebase.projectId=example-cartelera-project
+firebase.applicationId=1:1234567890:android:exampleapp123456
+firebase.apiKey=example-android-api-key
+firebase.gcmSenderId=1234567890
+firebase.serverBaseUrl=https://your-firebase-sync-server.example.com

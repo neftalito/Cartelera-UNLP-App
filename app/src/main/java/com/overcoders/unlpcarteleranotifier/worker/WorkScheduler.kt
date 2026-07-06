@@ -17,6 +17,12 @@ object WorkScheduler {
     private const val WORK_NAME = "cartelera_worker"
     private const val CURSADAS_WORK_NAME = "cursadas_worker"
 
+    suspend fun cancelLegacyPolling(context: Context) {
+        val manager = WorkManager.getInstance(context)
+        manager.cancelUniqueWork(WORK_NAME)
+        manager.cancelUniqueWork(CURSADAS_WORK_NAME)
+    }
+
     suspend fun schedule(context: Context, enabled: Boolean, intervalMinutes: Int, wifiOnly: Boolean) {
         val manager = WorkManager.getInstance(context)
         if (!enabled) {

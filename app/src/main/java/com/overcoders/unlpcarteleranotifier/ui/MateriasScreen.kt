@@ -80,6 +80,7 @@ import com.overcoders.unlpcarteleranotifier.data.ApiException
 import com.overcoders.unlpcarteleranotifier.data.MateriasService
 import com.overcoders.unlpcarteleranotifier.data.MateriasStore
 import com.overcoders.unlpcarteleranotifier.data.SettingsStore
+import com.overcoders.unlpcarteleranotifier.model.CarteleraNotificationTarget
 import com.overcoders.unlpcarteleranotifier.model.MateriaCatalogItem
 import com.overcoders.unlpcarteleranotifier.model.Mensaje
 import kotlinx.coroutines.Dispatchers
@@ -113,7 +114,9 @@ private fun rememberMateriasFilterState(): MateriasFilterState {
 @Composable
 fun MateriasScreen(
     initialSelected: Mensaje? = null,
+    initialTarget: CarteleraNotificationTarget? = null,
     onInitialSelectedConsumed: () -> Unit = {},
+    onInitialTargetConsumed: () -> Unit = {},
     onTitleChange: (String?) -> Unit = {},
     onFullscreenDetailChange: (Boolean) -> Unit = {},
     onHeaderActionsChange: (List<HeaderAction>) -> Unit = {}
@@ -140,6 +143,7 @@ fun MateriasScreen(
     var lastSeenTotal by remember { mutableStateOf<Int?>(null) }
 
     var selected by remember { mutableStateOf<Mensaje?>(null) }
+    var pendingTarget by remember { mutableStateOf<CarteleraNotificationTarget?>(null) }
     var materias by remember { mutableStateOf<List<MateriaCatalogItem>>(emptyList()) }
     @Suppress("VariableNeverRead") var materiasError by remember { mutableStateOf<String?>(null) }
     var materiasLoading by remember { mutableStateOf(false) }
@@ -294,6 +298,13 @@ fun MateriasScreen(
         }
     }
 
+    LaunchedEffect(initialTarget) {
+        if (initialTarget != null) {
+            pendingTarget = initialTarget
+            onInitialTargetConsumed()
+        }
+    }
+
     LaunchedEffect(Unit) {
         materiasLoading = true
         try {
@@ -313,8 +324,31 @@ fun MateriasScreen(
         }
     }
 
+    LaunchedEffect(pendingTarget?.materiaId, materias) {
+        val target = pendingTarget ?: return@LaunchedEffect
+        val materiaId = target.materiaId ?: return@LaunchedEffect
+        if (materias.isEmpty() || materiasFilterState.selected?.id == materiaId) {
+            return@LaunchedEffect
+        }
+        val materia = materias.firstOrNull { it.id == materiaId } ?: return@LaunchedEffect
+        materiasFilterState.selected = materia
+        materiasFilterState.query = materia.nombre
+    }
+
     LaunchedEffect(materiasFilterState.selected?.id) {
         loadPage(reset = true)
+    }
+
+    LaunchedEffect(pendingTarget, anuncios) {
+        val target = pendingTarget ?: return@LaunchedEffect
+        val match = anuncios.firstOrNull { anuncio ->
+            anuncio.titulo == target.titulo &&
+                anuncio.fecha == target.fecha &&
+                anuncio.materia.trim().equals(target.materia.trim(), ignoreCase = true) &&
+                (target.autor.isBlank() || anuncio.autor == target.autor)
+        } ?: return@LaunchedEffect
+        selected = match
+        pendingTarget = null
     }
 
     val shouldLoadMore by remember {

@@ -59,6 +59,7 @@ import com.overcoders.unlpcarteleranotifier.HeaderAction
 import com.overcoders.unlpcarteleranotifier.data.CursadasStore
 import com.overcoders.unlpcarteleranotifier.data.SettingsStore
 import com.overcoders.unlpcarteleranotifier.model.CursadaInfo
+import com.overcoders.unlpcarteleranotifier.model.CursadaNotificationTarget
 import com.overcoders.unlpcarteleranotifier.worker.CursadasNotificationDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -68,7 +69,9 @@ import java.io.IOException
 @Composable
 fun CursadasScreen(
     initialSelected: CursadaInfo? = null,
+    initialTarget: CursadaNotificationTarget? = null,
     onInitialSelectedConsumed: () -> Unit = {},
+    onInitialTargetConsumed: () -> Unit = {},
     onTitleChange: (String?) -> Unit = {},
     onFullscreenDetailChange: (Boolean) -> Unit = {},
     onHeaderActionsChange: (List<HeaderAction>) -> Unit = {}
@@ -84,6 +87,7 @@ fun CursadasScreen(
     var cursadasConNovedades by remember { mutableStateOf<Set<String>>(emptySet()) }
     var initialLoadCompleted by remember { mutableStateOf(false) }
     var consumedInitialSelection by remember { mutableStateOf<CursadaInfo?>(null) }
+    var pendingTarget by remember { mutableStateOf<CursadaNotificationTarget?>(null) }
     val listState = rememberLazyListState()
 
     suspend fun refresh(notifyChanges: Boolean) {
@@ -198,6 +202,13 @@ fun CursadasScreen(
         }
     }
 
+    LaunchedEffect(initialTarget) {
+        if (initialTarget != null) {
+            pendingTarget = initialTarget
+            onInitialTargetConsumed()
+        }
+    }
+
     LaunchedEffect(initialSelected, cursadas, initialLoadCompleted) {
         val pendingSelection = initialSelected ?: return@LaunchedEffect
         if (consumedInitialSelection == pendingSelection) {
@@ -217,6 +228,21 @@ fun CursadasScreen(
         }
         selected = cursadaToOpen
         onInitialSelectedConsumed()
+    }
+
+    LaunchedEffect(pendingTarget, cursadas) {
+        val target = pendingTarget ?: return@LaunchedEffect
+        val matchingCursada = cursadas.firstOrNull { cursada ->
+            cursada.materia.trim().equals(target.materia.trim(), ignoreCase = true) &&
+                (target.fechaModificacion.isBlank() ||
+                    cursada.ultimaModificacion == target.fechaModificacion)
+        } ?: return@LaunchedEffect
+        cursadasConNovedades = cursadasConNovedades - matchingCursada.materia
+        withContext(Dispatchers.IO) {
+            CursadasStore.markAsSeen(context, matchingCursada)
+        }
+        selected = matchingCursada
+        pendingTarget = null
     }
 
     LaunchedEffect(Unit) {

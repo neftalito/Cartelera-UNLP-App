@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -45,6 +47,10 @@ object SettingsStore {
     private val APP_OPEN_COUNT_KEY = intPreferencesKey("app_open_count")
     private val HAS_SHOWN_REVIEW_PROMPT_KEY =
         booleanPreferencesKey("has_shown_review_prompt")
+    private val LAST_SYNCED_FIREBASE_TOPICS_KEY =
+        stringSetPreferencesKey("last_synced_firebase_topics")
+    private val LAST_SYNCED_FIREBASE_TOKEN_KEY =
+        stringPreferencesKey("last_synced_firebase_token")
 
     fun intervalFlow(context: Context): Flow<Int> {
         return context.settingsDataStore.data.map { prefs ->
@@ -229,6 +235,28 @@ object SettingsStore {
     suspend fun setHideCancelledMateriasMessages(context: Context, hide: Boolean) {
         context.settingsDataStore.edit { prefs ->
             prefs[HIDE_CANCELLED_MATERIAS_MESSAGES_KEY] = hide
+        }
+    }
+
+    suspend fun getLastSyncedFirebaseTopics(context: Context): Set<String> {
+        val prefs = context.settingsDataStore.data.first()
+        return prefs[LAST_SYNCED_FIREBASE_TOPICS_KEY] ?: emptySet()
+    }
+
+    suspend fun setLastSyncedFirebaseTopics(context: Context, topics: Set<String>) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[LAST_SYNCED_FIREBASE_TOPICS_KEY] = topics
+        }
+    }
+
+    suspend fun getLastSyncedFirebaseToken(context: Context): String {
+        val prefs = context.settingsDataStore.data.first()
+        return prefs[LAST_SYNCED_FIREBASE_TOKEN_KEY].orEmpty()
+    }
+
+    suspend fun setLastSyncedFirebaseToken(context: Context, token: String) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[LAST_SYNCED_FIREBASE_TOKEN_KEY] = token
         }
     }
 
