@@ -28,8 +28,8 @@
 
   <p align="center">
     Aplicación Android para consultar la cartelera pública de la UNLP,
-    seguir materias, revisar cursadas y consultar aulas, con notificaciones
-    push cuando aparecen novedades.
+    seguir materias, revisar cursadas y consultar aulas. Con notificaciones
+    push cuando aparecen novedades en cartelera o en cursadas.
     <br />
     Hecha con Kotlin, Jetpack Compose y Firebase Cloud Messaging.
     <br />
@@ -44,11 +44,11 @@
 
 ## Sobre el proyecto
 
-Cartelera UNLP App consulta datos públicos de `gestiondocente.info.unlp.edu.ar`
-y los organiza dentro de una sola app. Permite seguir la cartelera general,
+Consulta datos públicos de `gestiondocente.info.unlp.edu.ar`
+y los organiza dentro de la app. Permite seguir la cartelera general,
 suscribirse a materias puntuales, revisar cambios de cursada, ver el estado
 actual de las aulas, consultar reservas por materia y recibir avisos push con
-menos ruido según las preferencias del usuario.
+novedades para todas las materias o aquellas a las que el usuario está suscrito.
 
 ## Capturas de pantalla
 
@@ -68,7 +68,7 @@ menos ruido según las preferencias del usuario.
 - Visualización de reservas de aulas por materia.
 - Acciones para compartir o copiar anuncios, cursadas y estado de aulas.
 - Sincronización de tópicos de Firebase según las preferencias del usuario.
-- Persistencia local para preferencias, materias, cursadas y estados vistos.
+- Persistencia local para preferencias, materias, cursadas y anuncios vistos.
 
 ## Tecnologías
 
