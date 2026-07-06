@@ -730,12 +730,30 @@ private fun normalizeAttachmentUri(rawUri: String): String? {
 
 private fun buildShareText(anuncio: Mensaje): String {
     val mensajePlano = htmlToShareText(anuncio.cuerpoHtml)
-    return buildString {
-        appendLine(anuncio.titulo)
-        appendLine(anuncio.materia)
-        appendLine(anuncio.fecha)
-        appendLine(anuncio.autor)
-        appendLine()
-        append(mensajePlano)
+    val adjuntosPlano = anuncio.adjuntos.mapNotNull { adjunto ->
+        val normalizedUri = normalizeAttachmentUri(adjunto.publicPath) ?: return@mapNotNull null
+        "${adjunto.nombre} ($normalizedUri)"
     }
+
+    val sections = mutableListOf(
+        listOf(
+            anuncio.titulo,
+            anuncio.materia,
+            anuncio.fecha,
+            anuncio.autor
+        ).joinToString("\n")
+    )
+
+    if (mensajePlano.isNotBlank()) {
+        sections += mensajePlano
+    }
+
+    if (adjuntosPlano.isNotEmpty()) {
+        sections += buildString {
+            appendLine("Adjuntos:")
+            adjuntosPlano.forEach { appendLine(it) }
+        }.trimEnd()
+    }
+
+    return sections.joinToString("\n\n")
 }

@@ -977,7 +977,7 @@ private val AppDestinations.label: String
     get() = when (this) {
         AppDestinations.CARTELERA -> "Cartelera"
         AppDestinations.CURSADAS -> "Cursadas"
-        AppDestinations.SUBSCRIPCIONES -> "Subscripciones"
+        AppDestinations.SUBSCRIPCIONES -> "Suscripciones"
         AppDestinations.HORARIOS -> "Reservas de aulas"
         AppDestinations.AULAS -> "Estado de aulas"
         AppDestinations.AJUSTES -> "Ajustes"

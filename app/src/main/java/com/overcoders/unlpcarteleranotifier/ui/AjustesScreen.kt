@@ -287,7 +287,7 @@ fun AjustesScreen(
                             colors = SwitchDefaults.colors()
                         )
                         Text(
-                            text = "Si desactivás esta opción, vas a poder suscribirte a materias específicas desde la pestaña de Subscripciones.",
+                            text = "Si desactivás esta opción, vas a poder suscribirte a materias específicas desde la pestaña de Suscripciones.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -330,7 +330,7 @@ fun AjustesScreen(
                         } else {
                             buildAnnotatedString {
                                 withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                                    append("La optimización de batería está activada. Conviene permitir uso sin restricciones.")
+                                    append("La optimización de batería está activada. Conviene permitir el uso sin restricciones.")
                                 }
                                 append("\n")
                                 append(
