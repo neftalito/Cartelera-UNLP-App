@@ -12,23 +12,6 @@ class MateriasService(
     private val url = "https://gestiondocente.info.unlp.edu.ar/cartelera/"
 
     /**
-     * Si hay cache -> devuelve cache
-     * Si no hay -> baja HTML, parsea options y guarda cache
-     */
-    suspend fun loadOrFetch(context: Context): List<MateriaCatalogItem> {
-        val cached = MateriasStore.load(context)
-        if (cached.isNotEmpty()) {
-            return cached
-        }
-
-        val fetched = fetchAndParse()
-        if (fetched.isNotEmpty()) {
-            MateriasStore.save(context, fetched)
-        }
-        return fetched
-    }
-
-    /**
      * Fuerza refrescar desde la web y pisa cache.
      */
     suspend fun refresh(context: Context): List<MateriaCatalogItem> {

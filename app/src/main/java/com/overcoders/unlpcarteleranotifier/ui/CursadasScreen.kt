@@ -54,10 +54,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.text.HtmlCompat
 import com.overcoders.unlpcarteleranotifier.HeaderAction
 import com.overcoders.unlpcarteleranotifier.data.CursadasStore
-import com.overcoders.unlpcarteleranotifier.data.SettingsStore
 import com.overcoders.unlpcarteleranotifier.model.CursadaInfo
 import com.overcoders.unlpcarteleranotifier.model.CursadaNotificationTarget
 import com.overcoders.unlpcarteleranotifier.worker.CursadasNotificationDispatcher
@@ -90,15 +88,12 @@ fun CursadasScreen(
     var pendingTarget by remember { mutableStateOf<CursadaNotificationTarget?>(null) }
     val listState = rememberLazyListState()
 
-    suspend fun refresh(notifyChanges: Boolean) {
+    suspend fun refresh() {
         loading = true
         error = null
         try {
             cursadas = withContext(Dispatchers.IO) {
-                CursadasNotificationDispatcher.process(
-                    context = context,
-                    notifyChanges = notifyChanges
-                )
+                CursadasNotificationDispatcher.process(context)
             }
 
             val vistosPorMateria = withContext(Dispatchers.IO) {
@@ -176,7 +171,7 @@ fun CursadasScreen(
                         icon = Icons.Default.Refresh,
                         contentDescription = "Refrescar cursadas",
                         enabled = !loading,
-                        onClick = { scope.launch { refresh(notifyChanges = false) } }
+                        onClick = { scope.launch { refresh() } }
                     )
                 )
             )
@@ -246,8 +241,9 @@ fun CursadasScreen(
     }
 
     LaunchedEffect(Unit) {
-        val autoCheckEnabled = SettingsStore.cursadasAutoCheckEnabled(context)
-        refresh(notifyChanges = !autoCheckEnabled)
+        // El backend Firebase ya es la única fuente de notificaciones del sistema.
+        // Esta pantalla solo refresca el snapshot local para mostrar contenido y badges.
+        refresh()
         initialLoadCompleted = true
     }
 
