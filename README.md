@@ -28,9 +28,10 @@
 
   <p align="center">
     Aplicación Android para consultar la cartelera pública de la UNLP,
-    seguir materias y recibir notificaciones cuando aparecen novedades.
+    seguir materias, revisar cursadas y consultar aulas, con notificaciones
+    push cuando aparecen novedades.
     <br />
-    Hecha con Kotlin, Jetpack Compose y WorkManager.
+    Hecha con Kotlin, Jetpack Compose y Firebase Cloud Messaging.
     <br />
     <br />
     <a href="https://github.com/neftalito/Cartelera-UNLP-App"><strong>Ver repositorio</strong></a>
@@ -43,10 +44,11 @@
 
 ## Sobre el proyecto
 
-Cartelera UNLP App consulta la cartelera pública de `gestiondocente.info.unlp.edu.ar`,
-detecta publicaciones nuevas y las presenta dentro de la app con notificaciones
-configurables. Permite seguir todas las novedades o suscribirse solo a materias
-puntuales para reducir ruido.
+Cartelera UNLP App consulta datos públicos de `gestiondocente.info.unlp.edu.ar`
+y los organiza dentro de una sola app. Permite seguir la cartelera general,
+suscribirse a materias puntuales, revisar cambios de cursada, ver el estado
+actual de las aulas, consultar reservas por materia y recibir avisos push con
+menos ruido según las preferencias del usuario.
 
 ## Capturas de pantalla
 
@@ -58,36 +60,40 @@ puntuales para reducir ruido.
 
 ## Funcionalidades principales
 
-- Listado y selección de materias disponibles en la cartelera.
-- Subscripciones por materia o notificaciones globales.
-- Visualización del detalle de avisos y avisos anulados dentro de la app.
+- Feed de cartelera con paginación incremental y filtro por materia.
+- Subscripciones por materia o recepción global de novedades.
+- Apertura del detalle de anuncios, anuncios anulados y avisos generales.
+- Consulta de cursadas por materia con seguimiento de la última actualización.
 - Visualización del estado actual de las aulas en la facultad.
 - Visualización de reservas de aulas por materia.
-- Sincronización periódica con intervalos configurables.
-- Persistencia local para preferencias, materias y estados de notificación.
+- Acciones para compartir o copiar anuncios, cursadas y estado de aulas.
+- Sincronización de tópicos de Firebase según las preferencias del usuario.
+- Persistencia local para preferencias, materias, cursadas y estados vistos.
 
 ## Tecnologías
 
 - **Kotlin** para la lógica principal de la aplicación.
 - **Jetpack Compose** para la interfaz.
-- **WorkManager** para las tareas periódicas en segundo plano.
+- **Firebase Cloud Messaging** para las notificaciones push y la suscripción a tópicos.
 - **OkHttp** y **Jsoup** para consumir y parsear la información remota.
 - **DataStore** para guardar preferencias y caché local.
+- **WorkManager** solo como compatibilidad transitoria para limpiar tareas legacy.
 
 ## Arquitectura rápida
 
 - `MainActivity.kt` centraliza navegación, permisos de notificaciones y apertura de detalles.
 - `data/` concentra scraping HTTP/HTML, parsing y persistencia liviana.
-- `worker/` ejecuta sincronizaciones periódicas y decide cuándo notificar cambios.
+- `push/` inicializa Firebase, sincroniza tópicos, recibe data messages y arma notificaciones locales.
+- `worker/` conserva compatibilidad transitoria y refrescos locales como el snapshot de cursadas.
 - `ui/` contiene las pantallas Compose y la lógica de presentación.
 - `model/` define las estructuras compartidas entre red, persistencia y UI.
 
 ## Flujo de sincronización
 
-1. WorkManager dispara `CarteleraWorker` o `CursadasWorker`.
-2. Cada worker usa los servicios de `data/` para descargar y parsear la fuente remota.
-3. `SettingsStore`, `MateriasStore` y `CursadasStore` guardan snapshots para detectar cambios y evitar duplicados.
-4. `NotificationDispatcher` o `CursadasNotificationDispatcher` construyen la notificación y abren `MainActivity` con el payload necesario.
+1. La app inicializa Firebase y registra la instalación actual para poder suscribirse a tópicos.
+2. `FirebaseTopicSyncManager` mantiene alineados los tópicos reales con `notifyAll` y las subscripciones elegidas por el usuario.
+3. Un backend central consulta cartelera y cursadas, detecta cambios y publica data messages en los tópicos correspondientes.
+4. `CarteleraFirebaseMessagingService` recibe el push y `PushNotificationDispatcher` arma la notificación local y la apertura dirigida dentro de la app.
 
 ## Estructura de carpetas
 
@@ -98,6 +104,7 @@ puntuales para reducir ruido.
 │   │   ├── java/com/overcoders/unlpcarteleranotifier/
 │   │   │   ├── data/
 │   │   │   ├── model/
+│   │   │   ├── push/
 │   │   │   ├── ui/
 │   │   │   └── worker/
 │   │   ├── res/
@@ -115,11 +122,12 @@ puntuales para reducir ruido.
 
 - `app/`: módulo principal de Android, donde vive prácticamente todo el código de la aplicación.
 - `data/`: servicios, scraping, repositorios y almacenamiento local con DataStore para materias, suscripciones, ajustes y cursadas.
-- `model/`: modelos de datos compartidos entre red, persistencia, workers y UI.
+- `model/`: modelos de datos compartidos entre red, persistencia, push y UI.
+- `push/`: integración con Firebase Cloud Messaging, sincronización de tópicos y utilidades de debug para probar pushes reales.
 - `ui/`: pantallas de Jetpack Compose, componentes visuales y tema de la aplicación.
-- `worker/`: tareas periódicas con WorkManager, lógica de sincronización y despacho de notificaciones.
+- `worker/`: compatibilidad transitoria del esquema anterior y refresco local de snapshots.
 - `res/`: recursos Android como colores, textos, iconos, temas y archivos XML de configuración.
-- `app/AndroidManifest.xml`: declara la app, permisos, workers, receiver y configuración base de Android.
+- `app/AndroidManifest.xml`: declara la app, permisos, receiver, servicio de Firebase y configuración base de Android.
 - `app/build.gradle.kts`: dependencias, versión de la app, SDK objetivo y configuración de compilación del módulo.
 - `imagenes/`: logo y capturas usadas por el README.
 - `build.gradle.kts`, `settings.gradle.kts` y `gradle.properties`: configuración general del proyecto, módulos y propiedades globales de Gradle.
@@ -129,6 +137,22 @@ puntuales para reducir ruido.
 1. Abrir el proyecto con **Android Studio**.
 2. Esperar a que Gradle sincronice las dependencias.
 3. Ejecutar en un dispositivo o emulador con Android 6.0 (API 23) o superior.
+
+### Configuración opcional para push real en debug
+
+Si querés probar Firebase real desde una build `debug`, podés crear un archivo
+`private-local.properties` en la raíz del repo con estos valores:
+
+```properties
+firebase.projectId=...
+firebase.applicationId=...
+firebase.apiKey=...
+firebase.gcmSenderId=...
+firebase.serverBaseUrl=...
+firebase.serverApiToken=...
+```
+
+El archivo de ejemplo está en `private-local.properties.example` y no se versiona.
 
 ### Comandos útiles
 
