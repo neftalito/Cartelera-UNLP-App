@@ -74,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.net.toUri
 import androidx.core.text.HtmlCompat
+import com.overcoders.unlpcarteleranotifier.BuildConfig
 import com.overcoders.unlpcarteleranotifier.HeaderAction
 import com.overcoders.unlpcarteleranotifier.data.AnunciosService
 import com.overcoders.unlpcarteleranotifier.data.ApiException
@@ -83,6 +84,7 @@ import com.overcoders.unlpcarteleranotifier.data.SettingsStore
 import com.overcoders.unlpcarteleranotifier.model.CarteleraNotificationTarget
 import com.overcoders.unlpcarteleranotifier.model.MateriaCatalogItem
 import com.overcoders.unlpcarteleranotifier.model.Mensaje
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -218,6 +220,8 @@ fun MateriasScreen(
                 lastSeenTotal = page.total
             }
             offset = startOffset + pageSize
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             error = errorMessageFor(e)
         } finally {
@@ -316,6 +320,8 @@ fun MateriasScreen(
                     materias = fetched
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             @Suppress("AssignedValueIsNeverRead")
             materiasError = e.message
@@ -517,17 +523,21 @@ fun MateriasScreen(
 }
 
 private fun errorMessageFor(error: Throwable): String {
+    val errorDetail = error.message?.takeIf { it.isNotBlank() }
+        ?: error::class.java.simpleName.takeIf { it.isNotBlank() }
+        ?: "Error desconocido"
+
+    fun withDebugDetail(baseMessage: String): String {
+        return if (BuildConfig.DEBUG) "$baseMessage ($errorDetail)." else baseMessage
+    }
+
     return when (error) {
         is ApiException -> {
-            val code = error.httpCode
-            if (code != null) {
-                "Hubo un error al obtener los anuncios (HTTP $code)."
-            } else {
-                "Hubo un error al obtener los anuncios (${error.message})."
-            }
+            val suffix = error.httpCode?.let { " (HTTP $it)" } ?: ""
+            withDebugDetail("Hubo un error al obtener los anuncios$suffix")
         }
-        is IOException -> "Hubo un error al obtener los anuncios (${error.localizedMessage ?: "Error de red"})."
-        else -> "Hubo un error al obtener los anuncios."
+        is IOException -> withDebugDetail("Hubo un error de red al obtener los anuncios")
+        else -> withDebugDetail("Hubo un error al obtener los anuncios")
     }
 }
 
