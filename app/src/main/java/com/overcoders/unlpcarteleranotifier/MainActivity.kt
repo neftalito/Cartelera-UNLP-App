@@ -263,6 +263,7 @@ fun UNLPCarteleraNotifierApp(
     val context = LocalContext.current
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.CARTELERA) }
     var selectedCategory by rememberSaveable { mutableStateOf(MainCategory.MATERIAS) }
+    var pendingPagerDestination by remember { mutableStateOf<AppDestinations?>(null) }
     // Guardamos sólo destino y categoría. Cada pantalla recompone su estado interno al volver,
     // así evitamos serializar árboles de estado más pesados o acoplados a Compose.
     val navigationHistory = rememberSaveable(
@@ -343,6 +344,7 @@ fun UNLPCarteleraNotifierApp(
         destination: AppDestinations,
         category: MainCategory = selectedCategory,
         addToHistory: Boolean = true,
+        syncPager: Boolean = true,
     ) {
         val sameState = destination == currentDestination && category == selectedCategory
         if (sameState) return
@@ -359,6 +361,7 @@ fun UNLPCarteleraNotifierApp(
         }
         currentDestination = destination
         selectedCategory = category
+        pendingPagerDestination = if (syncPager) destination else null
     }
 
     fun isNavigationDisabled(destination: AppDestinations): Boolean {
@@ -374,13 +377,19 @@ fun UNLPCarteleraNotifierApp(
             if (isNavigationDisabled(previousState.destination)) {
                 continue
             }
-            currentDestination = previousState.destination
-            selectedCategory = previousState.category
+            navigateTo(
+                destination = previousState.destination,
+                category = previousState.category,
+                addToHistory = false
+            )
             return
         }
 
-        currentDestination = AppDestinations.CARTELERA
-        selectedCategory = MainCategory.MATERIAS
+        navigateTo(
+            destination = AppDestinations.CARTELERA,
+            category = MainCategory.MATERIAS,
+            addToHistory = false
+        )
     }
 
     LaunchedEffect(initialNotificationMessage) {
@@ -571,8 +580,11 @@ fun UNLPCarteleraNotifierApp(
                 showSubscriptionsBlockedDialog = true
                 continue
             }
-            currentDestination = previousState.destination
-            selectedCategory = previousState.category
+            navigateTo(
+                destination = previousState.destination,
+                category = previousState.category,
+                addToHistory = false
+            )
             return@BackHandler
         }
     }
@@ -623,6 +635,12 @@ fun UNLPCarteleraNotifierApp(
         snapshotFlow { pagerState.settledPage }
             .collect { page ->
                 val destination = currentCategoryDestinations.getOrNull(page) ?: return@collect
+                val pendingDestination = pendingPagerDestination
+                // Ignoramos la página asentada anterior mientras una navegación programática
+                // todavía está llevando el pager al destino pedido por una notificación o tab.
+                if (pendingDestination != null && destination != pendingDestination) {
+                    return@collect
+                }
                 if (isNavigationDisabled(destination)) {
                     @Suppress("AssignedValueIsNeverRead")
                     showSubscriptionsBlockedDialog = true
@@ -632,8 +650,13 @@ fun UNLPCarteleraNotifierApp(
                     if (pagerState.currentPage != fallbackPage) {
                         pagerState.scrollToPage(fallbackPage)
                     }
-                } else if (destination != currentDestination) {
-                    navigateTo(destination = destination)
+                } else {
+                    if (pendingDestination == destination) {
+                        pendingPagerDestination = null
+                    }
+                    if (destination != currentDestination) {
+                        navigateTo(destination = destination, syncPager = false)
+                    }
                 }
             }
     }
