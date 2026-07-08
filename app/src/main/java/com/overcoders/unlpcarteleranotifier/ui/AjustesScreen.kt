@@ -3,7 +3,6 @@
 package com.overcoders.unlpcarteleranotifier.ui
 
 import android.annotation.SuppressLint
-import android.content.Context
 import android.content.Intent
 import android.os.PowerManager
 import android.provider.Settings
@@ -62,16 +61,12 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.overcoders.unlpcarteleranotifier.BuildConfig
 import com.overcoders.unlpcarteleranotifier.HeaderAction
 import com.overcoders.unlpcarteleranotifier.R
-import com.overcoders.unlpcarteleranotifier.data.MateriasStore
 import com.overcoders.unlpcarteleranotifier.data.SettingsStore
-import com.overcoders.unlpcarteleranotifier.data.SubscripcionesStore
 import com.overcoders.unlpcarteleranotifier.model.AvisoNotificationTarget
 import com.overcoders.unlpcarteleranotifier.model.CarteleraNotificationTarget
 import com.overcoders.unlpcarteleranotifier.model.CursadaNotificationTarget
 import com.overcoders.unlpcarteleranotifier.push.FirebaseClientConfig
-import com.overcoders.unlpcarteleranotifier.push.FirebaseDebugPushService
 import com.overcoders.unlpcarteleranotifier.push.FirebaseTopics
-import com.overcoders.unlpcarteleranotifier.push.FirebaseTopicSyncManager
 import com.overcoders.unlpcarteleranotifier.push.PushNotificationDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -105,11 +100,8 @@ fun AjustesScreen(
 
     val scrollState = rememberScrollState()
     val firebaseConfigured = remember { FirebaseClientConfig.isConfigured() }
-    val firebaseServerConfigured = remember { FirebaseClientConfig.isServerConfigured() }
     var syncedTopics by remember { mutableStateOf<Set<String>>(emptySet()) }
     var lastSyncedInstallationId by remember { mutableStateOf("") }
-    var debugPushStatus by remember { mutableStateOf<String?>(null) }
-    var debugActionRunning by remember { mutableStateOf(false) }
     val notifyAllHighlightColor by animateColorAsState(
         targetValue = if (showNotifyAllHighlight) {
             MaterialTheme.colorScheme.secondary.copy(alpha = 0.20f)
@@ -227,14 +219,6 @@ fun AjustesScreen(
                         )
                         Text(
                             text = "Tópico avisos: ${FirebaseTopics.AVISOS}",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        Text(
-                            text = if (firebaseServerConfigured) {
-                                "Servidor: ${FirebaseClientConfig.serverBaseUrl}"
-                            } else {
-                                "Servidor: URL de ejemplo"
-                            },
                             style = MaterialTheme.typography.bodySmall
                         )
                         Text(
@@ -381,79 +365,12 @@ fun AjustesScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text("Debug", style = MaterialTheme.typography.titleMedium)
-                        if (debugPushStatus != null) {
-                            Text(
-                                text = debugPushStatus.orEmpty(),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (debugPushStatus?.startsWith("Error") == true) {
-                                    MaterialTheme.colorScheme.error
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                }
-                            )
-                        }
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    debugActionRunning = true
-                                    debugPushStatus = null
-                                    try {
-                                        FirebaseTopicSyncManager.register(context)
-                                        FirebaseTopicSyncManager.sync(context)
-                                        refreshDebugPushState()
-                                        debugPushStatus = if (syncedTopics.isEmpty()) {
-                                            "Topics sincronizados, pero todavía no quedó ninguno guardado."
-                                        } else {
-                                            "Topics sincronizados: ${syncedTopics.sorted().joinToString()}."
-                                        }
-                                    } catch (e: Exception) {
-                                        debugPushStatus =
-                                            "Error al sincronizar topics: ${e.userFacingMessage()}"
-                                    } finally {
-                                        debugActionRunning = false
-                                    }
-                                }
-                            },
-                            enabled = firebaseConfigured && !debugActionRunning,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Sincronizar topics reales")
-                        }
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    debugActionRunning = true
-                                    debugPushStatus = null
-                                    try {
-                                        FirebaseTopicSyncManager.register(context)
-                                        FirebaseTopicSyncManager.sync(context)
-                                        refreshDebugPushState()
-                                        val target = withContext(Dispatchers.IO) {
-                                            resolveDebugMateriaTarget(context)
-                                        }
-                                        val result = FirebaseDebugPushService.sendTestPush(
-                                            pushType = FirebaseDebugPushService.PushType.CARTELERA,
-                                            target = FirebaseDebugPushService.Target.GENERAL,
-                                            materiaId = target.id,
-                                            materia = target.nombre,
-                                        )
-                                        debugPushStatus =
-                                            "$result Materia usada: ${target.nombre} (${target.id})."
-                                    } catch (e: Exception) {
-                                        debugPushStatus =
-                                            "Error al enviar push general: ${e.userFacingMessage()}"
-                                    } finally {
-                                        debugActionRunning = false
-                                    }
-                                }
-                            },
-                            enabled = firebaseConfigured &&
-                                firebaseServerConfigured &&
-                                !debugActionRunning,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Enviar push real al topic general")
-                        }
+                        Text(
+                            text = "Estas pruebas muestran notificaciones locales en este dispositivo. " +
+                                "No contactan al servidor ni envian nada a otros usuarios.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         Button(
                             onClick = {
                                 PushNotificationDispatcher.showCarteleraNotification(
@@ -585,43 +502,4 @@ fun AjustesScreen(
                 .padding(bottom = 8.dp)
         )
     }
-}
-
-private data class DebugMateriaTarget(
-    val id: String,
-    val nombre: String,
-)
-
-private suspend fun resolveDebugMateriaTarget(context: Context): DebugMateriaTarget {
-    val materias = MateriasStore.load(context)
-    val materiasById = materias.associateBy { it.id }
-    val subscribedTarget = SubscripcionesStore.subscripcionesFlow(context)
-        .first()
-        .asSequence()
-        .mapNotNull(materiasById::get)
-        .firstOrNull()
-
-    if (subscribedTarget != null) {
-        return DebugMateriaTarget(
-            id = subscribedTarget.id,
-            nombre = subscribedTarget.nombre,
-        )
-    }
-
-    val cachedTarget = materias.firstOrNull()
-    if (cachedTarget != null) {
-        return DebugMateriaTarget(
-            id = cachedTarget.id,
-            nombre = cachedTarget.nombre,
-        )
-    }
-
-    return DebugMateriaTarget(
-        id = "123",
-        nombre = "Materia de prueba",
-    )
-}
-
-private fun Throwable.userFacingMessage(): String {
-    return message?.takeIf { it.isNotBlank() } ?: "error inesperado"
 }

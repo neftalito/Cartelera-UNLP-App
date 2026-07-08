@@ -254,6 +254,15 @@ fun CursadasScreen(
         return
     }
 
+    val showNotificationOpeningState = loading && (
+        initialSelected != null || initialTarget != null || pendingTarget != null
+    )
+
+    if (showNotificationOpeningState) {
+        NotificationOpeningState()
+        return
+    }
+
     LaunchedEffect(cursadas, filter) {
         listState.scrollToItem(0)
     }

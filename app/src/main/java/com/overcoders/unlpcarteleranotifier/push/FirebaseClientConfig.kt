@@ -11,19 +11,12 @@ object FirebaseClientConfig {
     val applicationId: String = BuildConfig.FIREBASE_APPLICATION_ID.trim()
     val apiKey: String = BuildConfig.FIREBASE_API_KEY.trim()
     val gcmSenderId: String = BuildConfig.FIREBASE_GCM_SENDER_ID.trim()
-    val serverBaseUrl: String = BuildConfig.FIREBASE_SERVER_BASE_URL.trim()
-    val serverApiToken: String = BuildConfig.FIREBASE_SERVER_API_TOKEN.trim()
 
     fun isConfigured(): Boolean {
         return projectId.isRealValue() &&
             applicationId.isRealValue() &&
             apiKey.isRealValue() &&
             gcmSenderId.isRealValue()
-    }
-
-    fun isServerConfigured(): Boolean {
-        return serverBaseUrl.isNotBlank() &&
-            !serverBaseUrl.contains("your-firebase-sync-server.example.com")
     }
 
     fun buildOptions(): FirebaseOptions {

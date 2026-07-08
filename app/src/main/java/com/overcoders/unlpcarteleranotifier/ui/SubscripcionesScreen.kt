@@ -31,9 +31,6 @@ import com.overcoders.unlpcarteleranotifier.data.MateriasStore
 import com.overcoders.unlpcarteleranotifier.data.SettingsStore
 import com.overcoders.unlpcarteleranotifier.data.SubscripcionesStore
 import com.overcoders.unlpcarteleranotifier.model.MateriaCatalogItem
-import com.overcoders.unlpcarteleranotifier.push.FirebaseClientConfig
-import com.overcoders.unlpcarteleranotifier.push.FirebaseDebugPushService
-import com.overcoders.unlpcarteleranotifier.push.FirebaseTopicSyncManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -87,12 +84,8 @@ fun SubscripcionesScreen(
 
     val notifyAll by SettingsStore.notifyAllFlow(context).collectAsState(initial = true)
     val isEnabled = !notifyAll
-    val firebaseConfigured = remember { FirebaseClientConfig.isConfigured() }
-    val firebaseServerConfigured = remember { FirebaseClientConfig.isServerConfigured() }
 
     var pendingSubscriptions by remember { mutableStateOf(emptySet<String>()) }
-    var debugPushStatus by remember { mutableStateOf<String?>(null) }
-    var debugPushRunning by remember { mutableStateOf(false) }
     val effectiveSubscripcionesIds = remember(subscriptasIds, pendingSubscriptions) {
         subscriptasIds + pendingSubscriptions
     }
@@ -184,64 +177,6 @@ fun SubscripcionesScreen(
                         "Desactivá esa opción en ajustes para volver a gestionar tus suscripciones.",
                 style = MaterialTheme.typography.bodySmall
             )
-            Spacer(Modifier.height(12.dp))
-        }
-
-        if (BuildConfig.DEBUG) {
-            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text("Debug push real", style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        text = if (notifyAll) {
-                            "Esta instalación debería recibir el topic general de materias y el de avisos."
-                        } else {
-                            "Esta instalación debería recibir un topic por cada materia suscripta y el de avisos."
-                        },
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    when {
-                        !firebaseConfigured -> {
-                            Text(
-                                "Firebase cliente todavía usa valores de ejemplo.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
-
-                        !firebaseServerConfigured -> {
-                            Text(
-                                "Configurá firebase.serverBaseUrl para probar pushes reales desde la app.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
-
-                        else -> {
-                            Text(
-                                "Usa los botones de cada materia para comparar el topic general contra el topic específico.",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                    }
-                    if (debugPushStatus != null) {
-                        Text(
-                            text = debugPushStatus.orEmpty(),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (debugPushStatus?.startsWith("Error") == true) {
-                                MaterialTheme.colorScheme.error
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            }
-                        )
-                    }
-                }
-            }
-
             Spacer(Modifier.height(12.dp))
         }
 
@@ -423,67 +358,6 @@ fun SubscripcionesScreen(
                                     "idMateria=${m.id}",
                                     style = MaterialTheme.typography.bodySmall
                                 )
-                                if (firebaseConfigured && firebaseServerConfigured && !m.invalid) {
-                                    Spacer(Modifier.height(4.dp))
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        TextButton(
-                                            onClick = {
-                                                scope.launch {
-                                                    debugPushRunning = true
-                                                    debugPushStatus = null
-                                                    try {
-                                                        FirebaseTopicSyncManager.register(context)
-                                                        FirebaseTopicSyncManager.sync(context)
-                                                        val result = FirebaseDebugPushService.sendTestPush(
-                                                            pushType = FirebaseDebugPushService.PushType.CARTELERA,
-                                                            target = FirebaseDebugPushService.Target.GENERAL,
-                                                            materiaId = m.id,
-                                                            materia = m.nombre,
-                                                        )
-                                                        debugPushStatus =
-                                                            "$result Materia usada: ${m.nombre} (${m.id})."
-                                                    } catch (e: Exception) {
-                                                        debugPushStatus =
-                                                            "Error al enviar push general: ${e.userFacingMessage()}"
-                                                    } finally {
-                                                        debugPushRunning = false
-                                                    }
-                                                }
-                                            },
-                                            enabled = !debugPushRunning
-                                        ) {
-                                            Text("Push general")
-                                        }
-                                        TextButton(
-                                            onClick = {
-                                                scope.launch {
-                                                    debugPushRunning = true
-                                                    debugPushStatus = null
-                                                    try {
-                                                        FirebaseTopicSyncManager.register(context)
-                                                        FirebaseTopicSyncManager.sync(context)
-                                                        val result = FirebaseDebugPushService.sendTestPush(
-                                                            pushType = FirebaseDebugPushService.PushType.CARTELERA,
-                                                            target = FirebaseDebugPushService.Target.SPECIFIC,
-                                                            materiaId = m.id,
-                                                            materia = m.nombre,
-                                                        )
-                                                        debugPushStatus =
-                                                            "$result Materia usada: ${m.nombre} (${m.id})."
-                                                    } catch (e: Exception) {
-                                                        debugPushStatus =
-                                                            "Error al enviar push por materia: ${e.userFacingMessage()}"
-                                                    } finally {
-                                                        debugPushRunning = false
-                                                    }
-                                                }
-                                            },
-                                            enabled = !debugPushRunning
-                                        ) {
-                                            Text("Push materia")
-                                        }
-                                    }
-                                }
                             }
                         }
                         IconButton(
@@ -502,8 +376,4 @@ fun SubscripcionesScreen(
             }
         }
     }
-}
-
-private fun Throwable.userFacingMessage(): String {
-    return message?.takeIf { it.isNotBlank() } ?: "error inesperado"
 }

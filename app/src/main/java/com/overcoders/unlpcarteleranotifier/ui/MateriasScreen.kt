@@ -379,6 +379,13 @@ fun MateriasScreen(
         return
     }
 
+    val showNotificationOpeningState = loadingInitial && (initialTarget != null || pendingTarget != null)
+
+    if (showNotificationOpeningState) {
+        NotificationOpeningState()
+        return
+    }
+
     Column(
         Modifier
             .fillMaxSize()
