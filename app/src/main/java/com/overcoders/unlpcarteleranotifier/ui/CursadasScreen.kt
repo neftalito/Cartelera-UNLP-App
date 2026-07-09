@@ -1,17 +1,7 @@
 package com.overcoders.unlpcarteleranotifier.ui
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.content.Intent
-import android.text.method.LinkMovementMethod
-import android.widget.TextView
-import android.widget.Toast
-import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,8 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
@@ -33,7 +21,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,11 +36,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import com.overcoders.unlpcarteleranotifier.HeaderAction
 import com.overcoders.unlpcarteleranotifier.data.CursadasStore
 import com.overcoders.unlpcarteleranotifier.model.CursadaInfo
@@ -74,7 +58,7 @@ fun CursadasScreen(
     onFullscreenDetailChange: (Boolean) -> Unit = {},
     onHeaderActionsChange: (List<HeaderAction>) -> Unit = {}
 ) {
-    val context = LocalContext.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
 
     var loading by remember { mutableStateOf(false) }
@@ -130,25 +114,22 @@ fun CursadasScreen(
                         icon = Icons.Default.ContentCopy,
                         contentDescription = "Copiar cursada",
                         onClick = {
-                            val clipboard =
-                                context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("Cursada", shareText))
-                            Toast.makeText(
-                                context,
-                                "Copiado al portapapeles",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                            copyPlainText(
+                                context = context,
+                                label = "Cursada",
+                                text = shareText
+                            )
                         }
                     ),
                     HeaderAction(
                         icon = Icons.Default.Share,
                         contentDescription = "Compartir cursada",
                         onClick = {
-                            val intent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, shareText)
-                            }
-                            context.startActivity(Intent.createChooser(intent, "Compartir cursada"))
+                            sharePlainText(
+                                context = context,
+                                text = shareText,
+                                chooserTitle = "Compartir cursada"
+                            )
                         }
                     )
                 )
@@ -241,16 +222,15 @@ fun CursadasScreen(
     }
 
     LaunchedEffect(Unit) {
-        // El backend Firebase ya es la única fuente de notificaciones del sistema.
-        // Esta pantalla solo refresca el snapshot local para mostrar contenido y badges.
         refresh()
         initialLoadCompleted = true
     }
 
     if (selected != null) {
-        CursadaDetailScreen(cursada = selected!!, onBack = {
-            selected = null
-        })
+        CursadaDetailScreen(
+            cursada = selected!!,
+            onBack = { selected = null }
+        )
         return
     }
 
@@ -284,7 +264,6 @@ fun CursadasScreen(
             .fillMaxSize()
             .padding(16.dp)
     ) {
-
         OutlinedTextField(
             value = filter,
             onValueChange = { filter = it },
@@ -371,101 +350,4 @@ private fun errorMessageFor(error: Throwable): String {
         is IOException -> "Hubo un error al obtener las cursadas (${error.localizedMessage ?: "Error de red"})."
         else -> "Hubo un error al obtener las cursadas."
     }
-}
-
-@Composable
-private fun CursadaDetailScreen(cursada: CursadaInfo, onBack: () -> Unit) {
-    BackHandler(onBack = onBack)
-    val context = LocalContext.current
-    val textColor = MaterialTheme.colorScheme.onSurface.toArgb()
-    val linkColor = MaterialTheme.colorScheme.primary.toArgb()
-    val detailScrollState = rememberScrollState()
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        Text(cursada.materia, style = MaterialTheme.typography.headlineSmall)
-        Spacer(Modifier.height(4.dp))
-        Text(
-            "Última actualización: ${cursada.ultimaModificacion.ifBlank { "Sin fecha" }}",
-            style = MaterialTheme.typography.bodySmall
-        )
-        Spacer(Modifier.height(12.dp))
-
-        Box(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(detailScrollState)
-                    .padding(bottom = 36.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text("Inicio de cursada", style = MaterialTheme.typography.titleMedium)
-                HtmlBlock(
-                    html = cursada.inicioCursadaHtml,
-                    textColor = textColor,
-                    linkColor = linkColor,
-                    context = context
-                )
-                HorizontalDivider()
-                Text("Horarios de cursada", style = MaterialTheme.typography.titleMedium)
-                HtmlBlock(
-                    html = cursada.horariosCursadaHtml,
-                    textColor = textColor,
-                    linkColor = linkColor,
-                    context = context
-                )
-            }
-
-            ScrollMoreHint(
-                scrollState = detailScrollState,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 8.dp)
-            )
-        }
-    }
-}
-
-private fun buildShareText(cursada: CursadaInfo): String {
-    val inicioCursadaPlano = htmlToShareText(cursada.inicioCursadaHtml)
-    val horariosCursadaPlano = htmlToShareText(cursada.horariosCursadaHtml)
-
-    return buildString {
-        appendLine(cursada.materia)
-        appendLine("Última actualización: ${cursada.ultimaModificacion.ifBlank { "Sin fecha" }}")
-        appendLine()
-        appendLine("Inicio de cursada")
-        appendLine(inicioCursadaPlano.ifBlank { "Sin información" })
-        appendLine()
-        appendLine("Horarios de cursada")
-        append(horariosCursadaPlano.ifBlank { "Sin información" })
-    }
-}
-
-@Composable
-private fun HtmlBlock(html: String, textColor: Int, linkColor: Int, context: Context) {
-    AndroidView(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface, MaterialTheme.shapes.medium)
-            .padding(12.dp),
-        factory = {
-            TextView(context).apply {
-                setTextIsSelectable(true)
-                movementMethod = LinkMovementMethod.getInstance()
-            }
-        },
-        update = { tv ->
-            tv.setTextColor(textColor)
-            tv.setLinkTextColor(linkColor)
-            tv.text = parseHtmlWithoutTextColors(
-                html.ifBlank { "<p>Sin información</p>" }
-            )
-        }
-    )
 }
