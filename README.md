@@ -81,11 +81,12 @@ novedades para todas las materias o aquellas a las que el usuario está suscrito
 
 ## Arquitectura rápida
 
-- `MainActivity.kt` centraliza navegación, permisos de notificaciones y apertura de detalles.
+- `MainActivity.kt` se encarga del puente con Android: permisos, intents externos y arranque de la UI.
+- `navigation/` concentra la shell de navegación principal, tabs, pager, dialogs globales y encabezado compartido.
 - `data/` concentra scraping HTTP/HTML, parsing y persistencia liviana.
 - `push/` inicializa Firebase, sincroniza tópicos, recibe data messages y arma notificaciones locales.
 - `worker/` conserva compatibilidad transitoria y refrescos locales como el snapshot de cursadas.
-- `ui/` contiene las pantallas Compose y la lógica de presentación.
+- `ui/` contiene las pantallas Compose, componentes visuales y helpers de presentación, separados por feature.
 - `model/` define las estructuras compartidas entre red, persistencia y UI.
 
 ## Flujo de sincronización
@@ -102,10 +103,17 @@ novedades para todas las materias o aquellas a las que el usuario está suscrito
 ├── app/
 │   ├── src/main/
 │   │   ├── java/com/overcoders/unlpcarteleranotifier/
+│   │   │   ├── navigation/
 │   │   │   ├── data/
 │   │   │   ├── model/
 │   │   │   ├── push/
 │   │   │   ├── ui/
+│   │   │   │   ├── ajustes/
+│   │   │   │   ├── cartelera/
+│   │   │   │   ├── common/
+│   │   │   │   ├── cursadas/
+│   │   │   │   ├── horarios/
+│   │   │   │   └── theme/
 │   │   │   └── worker/
 │   │   ├── res/
 │   │   └── AndroidManifest.xml
@@ -121,10 +129,14 @@ novedades para todas las materias o aquellas a las que el usuario está suscrito
 ```
 
 - `app/`: módulo principal de Android, donde vive prácticamente todo el código de la aplicación.
+- `navigation/`: estructura principal de Compose con navegación, top bar, tabs, bottom bar y dialogs globales.
 - `data/`: servicios, scraping, repositorios y almacenamiento local con DataStore para materias, suscripciones, ajustes y cursadas.
 - `model/`: modelos de datos compartidos entre red, persistencia, push y UI.
 - `push/`: integración con Firebase Cloud Messaging, sincronización de tópicos y utilidades de debug para probar pushes reales.
-- `ui/`: pantallas de Jetpack Compose, componentes visuales y tema de la aplicación.
+- `ui/`: pantallas de Jetpack Compose y lógica de presentación.
+- `ui/cartelera`, `ui/cursadas`, `ui/horarios` y `ui/ajustes`: componentes y detalles extraídos por feature para evitar pantallas monolíticas.
+- `ui/common/`: bloques compartidos como renderizado HTML y acciones reutilizables de copiar/compartir.
+- `ui/theme/`: tema, colores y tipografías de la aplicación.
 - `worker/`: compatibilidad transitoria del esquema anterior y refresco local de snapshots.
 - `res/`: recursos Android como colores, textos, iconos, temas y archivos XML de configuración.
 - `app/AndroidManifest.xml`: declara la app, permisos, receiver, servicio de Firebase y configuración base de Android.
