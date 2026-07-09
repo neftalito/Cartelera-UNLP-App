@@ -39,20 +39,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.overcoders.unlpcarteleranotifier.HeaderAction
 import com.overcoders.unlpcarteleranotifier.data.AppHttpClient
+import com.overcoders.unlpcarteleranotifier.model.AulaEstado
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
-
-private data class AulaEstado(
-    val aulaNombre: String,
-    val aulaId: String,
-    val materia: String,
-    val horaDesde: String,
-    val horaHasta: String,
-)
+import org.json.JSONObject
 
 private class AulasService(
     private val client: OkHttpClient = AppHttpClient.instance,
@@ -72,8 +66,8 @@ private class AulasService(
 
             val json = JSONArray(body)
             return buildList {
-                for (i in 0 until json.length()) {
-                    val row = json.optJSONObject(i) ?: continue
+                for (index in 0 until json.length()) {
+                    val row = json.optJSONObject(index) ?: continue
                     val aula = row.optJSONObject("aula")
                     val materia = row.optJSONObject("materia")
                     val desde = row.optJSONObject("horaDesde")
@@ -93,7 +87,7 @@ private class AulasService(
         }
     }
 
-    private fun formatHour(hourObj: org.json.JSONObject?): String {
+    private fun formatHour(hourObj: JSONObject?): String {
         val rawHour = hourObj?.optString("h").orEmpty().trim()
         val rawMinute = hourObj?.optString("m").orEmpty().trim()
         val hour = rawHour.toIntOrNull()
@@ -157,7 +151,7 @@ fun AulasScreen(
                             context,
                             "Copiado al portapapeles",
                             android.widget.Toast.LENGTH_SHORT
-                        ).show()
+                        )
                     }
                 ),
                 HeaderAction(
@@ -191,7 +185,6 @@ fun AulasScreen(
             .fillMaxSize()
             .padding(16.dp)
     ) {
-
         when {
             loading -> {
                 Column(
