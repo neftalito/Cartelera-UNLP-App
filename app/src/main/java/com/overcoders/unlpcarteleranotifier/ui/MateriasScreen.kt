@@ -1,20 +1,7 @@
 package com.overcoders.unlpcarteleranotifier.ui
 
-import android.annotation.SuppressLint
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.content.Intent
-import android.text.method.LinkMovementMethod
-import android.widget.TextView
-import android.widget.Toast
-import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,20 +15,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -50,7 +33,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -60,20 +42,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.net.toUri
-import androidx.core.text.HtmlCompat
 import com.overcoders.unlpcarteleranotifier.BuildConfig
 import com.overcoders.unlpcarteleranotifier.HeaderAction
 import com.overcoders.unlpcarteleranotifier.data.AnunciosService
@@ -89,22 +62,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.IOException
-
-@Stable
-private class MateriasFilterState(
-    expanded: Boolean = false,
-    query: String = "",
-    selected: MateriaCatalogItem? = null
-) {
-    var expanded by mutableStateOf(expanded)
-    var query by mutableStateOf(query)
-    var selected by mutableStateOf(selected)
-}
-
-@Composable
-private fun rememberMateriasFilterState(): MateriasFilterState {
-    return remember { MateriasFilterState() }
-}
 
 /**
  * Pantalla principal de anuncios.
@@ -150,8 +107,6 @@ fun MateriasScreen(
     @Suppress("VariableNeverRead") var materiasError by remember { mutableStateOf<String?>(null) }
     var materiasLoading by remember { mutableStateOf(false) }
 
-    // El endpoint puede repetir elementos entre recargas o cambios de paginado. Mantener una
-    // clave estable evita tarjetas duplicadas cuando acumulamos páginas en memoria.
     val seenKeys = remember { mutableStateListOf<String>() }
     fun keyOf(m: Mensaje): String = "${m.materia}||${m.titulo}||${m.fecha}||${m.autor}"
 
@@ -166,8 +121,6 @@ fun MateriasScreen(
     suspend fun loadPage(reset: Boolean) {
         error = null
         if (reset) {
-            // Un reset representa un nuevo snapshot del feed: limpiamos la lista acumulada y
-            // recalculamos contadores sólo cuando estamos en el feed global.
             loadingInitial = true
             loadingMore = false
             offset = 0
@@ -193,27 +146,26 @@ fun MateriasScreen(
                 )
             }
 
-            // Dedupe defensivo: el backend no garantiza que cada página sea perfectamente
-            // disjunta respecto de la anterior o de una recarga manual.
             val newOnes = page.mensajes.filter { m ->
                 val k = keyOf(m)
-                if (seenKeys.contains(k)) false else {
-                    seenKeys.add(k); true
+                if (seenKeys.contains(k)) {
+                    false
+                } else {
+                    seenKeys.add(k)
+                    true
                 }
             }
 
             anuncios = anuncios + newOnes
-            // El contador de novedades se apoya en el total global visto por última vez; no
-            // aplica cuando el usuario está filtrando por una materia puntual.
             if (reset && materiasFilterState.selected == null) {
                 val storedTotal = lastSeenTotal ?: -1
                 val diff = if (storedTotal < 0) 0 else (page.total - storedTotal).coerceAtLeast(0)
                 newCount = if (storedTotal < 0) 0 else diff
                 if (newCount > 0) {
-                    Toast.makeText(
+                    android.widget.Toast.makeText(
                         context,
                         "Hay $newCount anuncios nuevos",
-                        Toast.LENGTH_SHORT
+                        android.widget.Toast.LENGTH_SHORT
                     ).show()
                 }
                 SettingsStore.setLastSeenTotal(context, page.total)
@@ -223,7 +175,7 @@ fun MateriasScreen(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            error = errorMessageFor(e)
+            error = errorMessageFor(error = e)
         } finally {
             loadingInitial = false
             loadingMore = false
@@ -245,25 +197,22 @@ fun MateriasScreen(
                         icon = Icons.Default.ContentCopy,
                         contentDescription = "Copiar anuncio",
                         onClick = {
-                            val clipboard =
-                                context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("Anuncio", shareText))
-                            Toast.makeText(
-                                context,
-                                "Copiado al portapapeles",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                            copyPlainText(
+                                context = context,
+                                label = "Anuncio",
+                                text = shareText
+                            )
                         }
                     ),
                     HeaderAction(
                         icon = Icons.Default.Share,
                         contentDescription = "Compartir anuncio",
                         onClick = {
-                            val intent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, shareText)
-                            }
-                            context.startActivity(Intent.createChooser(intent, "Compartir anuncio"))
+                            sharePlainText(
+                                context = context,
+                                text = shareText,
+                                chooserTitle = "Compartir anuncio"
+                            )
                         }
                     )
                 )
@@ -391,7 +340,6 @@ fun MateriasScreen(
             .fillMaxSize()
             .padding(16.dp)
     ) {
-
         ExposedDropdownMenuBox(
             expanded = materiasFilterState.expanded,
             onExpandedChange = { isExpanded ->
@@ -411,7 +359,7 @@ fun MateriasScreen(
                     }
                 },
                 label = { Text("Filtrar por materia") },
-                placeholder = { Text("Buscar materia…") },
+                placeholder = { Text("Buscar materia...") },
                 trailingIcon = {
                     ExposedDropdownMenuDefaults.TrailingIcon(expanded = materiasFilterState.expanded)
                 },
@@ -459,7 +407,6 @@ fun MateriasScreen(
             }
         }
 
-
         if (materiasFilterState.selected != null) {
             Spacer(Modifier.height(8.dp))
             TextButton(onClick = {
@@ -480,13 +427,6 @@ fun MateriasScreen(
         if (error != null) {
             Text(error.orEmpty(), color = MaterialTheme.colorScheme.error)
             Spacer(Modifier.height(8.dp))
-//            Button(
-//                onClick = { scope.launch { loadPage(reset = false) } },
-//                enabled = !loadingInitial && !loadingMore
-//            ) {
-//                Text("Reintentar cargar más")
-//            }
-//            Spacer(Modifier.height(12.dp))
         }
 
         val anunciosVisibles = remember(anuncios, hideCancelledMessages) {
@@ -510,7 +450,10 @@ fun MateriasScreen(
                 Spacer(Modifier.height(8.dp))
 
                 if (loadingMore) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                    androidx.compose.foundation.layout.Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
                         CircularProgressIndicator()
                     }
                     Spacer(Modifier.height(8.dp))
@@ -543,234 +486,8 @@ private fun errorMessageFor(error: Throwable): String {
             val suffix = error.httpCode?.let { " (HTTP $it)" } ?: ""
             withDebugDetail("Hubo un error al obtener los anuncios$suffix")
         }
+
         is IOException -> withDebugDetail("Hubo un error de red al obtener los anuncios")
         else -> withDebugDetail("Hubo un error al obtener los anuncios")
     }
-}
-
-@Composable
-private fun AnuncioCard(
-    anuncio: Mensaje,
-    isNew: Boolean,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .alpha(if (isNew) 1f else 0.6f)
-            .clickable { onClick() }
-    ) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        anuncio.titulo,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 4,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (anuncio.adjuntos.isNotEmpty()) {
-                        Icon(
-                            imageVector = Icons.Default.AttachFile,
-                            contentDescription = "Tiene adjuntos",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-                if (isNew) {
-                    Text(
-                        text = "Nuevo",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-            Text(anuncio.materia, style = MaterialTheme.typography.bodySmall)
-
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(anuncio.fecha, style = MaterialTheme.typography.labelSmall)
-                Text(anuncio.autor, style = MaterialTheme.typography.labelSmall)
-            }
-
-            if (anuncio.isAnulado) {
-                Text("ANULADO", color = MaterialTheme.colorScheme.error)
-            }
-
-            val preview = remember(anuncio.cuerpoHtml) {
-                HtmlCompat.fromHtml(
-                    anuncio.cuerpoHtml,
-                    HtmlCompat.FROM_HTML_MODE_LEGACY
-                ).toString()
-                    .replace("\n", " ")
-                    .replace("\r", " ")
-                    .take(180) + if (anuncio.cuerpoHtml.length > 180) "…" else ""
-            }
-            Text(preview, style = MaterialTheme.typography.bodyMedium)
-        }
-    }
-}
-
-@Composable
-private fun AnuncioDetailScreen(
-    anuncio: Mensaje,
-    onBack: () -> Unit
-) {
-    BackHandler(onBack = onBack)
-    val context = LocalContext.current
-    val uriHandler = LocalUriHandler.current
-    val detailScrollState = rememberScrollState()
-    Column(
-        Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        Text(anuncio.titulo, style = MaterialTheme.typography.headlineSmall)
-        Spacer(Modifier.height(4.dp))
-        Text(anuncio.materia, style = MaterialTheme.typography.titleMedium)
-
-        Spacer(Modifier.height(6.dp))
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(anuncio.fecha, style = MaterialTheme.typography.bodySmall)
-            Text(anuncio.autor, style = MaterialTheme.typography.bodySmall)
-        }
-
-        if (anuncio.isAnulado) {
-            Spacer(Modifier.height(8.dp))
-            Text("ANULADO", color = MaterialTheme.colorScheme.error)
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        val textColor = MaterialTheme.colorScheme.onSurface.toArgb()
-        val linkColor = MaterialTheme.colorScheme.primary.toArgb()
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(MaterialTheme.shapes.medium)
-                .background(MaterialTheme.colorScheme.surface)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(detailScrollState)
-                    .padding(12.dp)
-            ) {
-                @Suppress("COMPOSE_APPLIER_CALL_MISMATCH")
-                AndroidView(
-                    modifier = Modifier.fillMaxWidth(),
-                    factory = {
-                        TextView(context).apply {
-                            // habilita links <a href=...>
-                            setTextIsSelectable(true)
-                            movementMethod = LinkMovementMethod.getInstance()
-                        }
-                    },
-                    update = { tv ->
-                        tv.setTextColor(textColor)
-                        tv.setLinkTextColor(linkColor)
-                        tv.text = parseHtmlWithoutTextColors(anuncio.cuerpoHtml)
-                    }
-                )
-
-                if (anuncio.adjuntos.isNotEmpty()) {
-                    Spacer(Modifier.height(16.dp))
-                    HorizontalDivider()
-                    Spacer(Modifier.height(12.dp))
-                    Text("Adjuntos", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(8.dp))
-                    anuncio.adjuntos.forEach { adjunto ->
-                        Text(
-                            text = adjunto.nombre,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    val normalizedUri = normalizeAttachmentUri(adjunto.publicPath)
-                                    if (normalizedUri == null) {
-                                        Toast.makeText(
-                                            context,
-                                            "No se pudo abrir el adjunto",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                        return@clickable
-                                    }
-
-                                    runCatching { uriHandler.openUri(normalizedUri) }
-                                        .onFailure {
-                                            Toast.makeText(
-                                                context,
-                                                "No se pudo abrir el adjunto",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
-                                }
-                                .padding(vertical = 4.dp)
-                        )
-                    }
-                }
-            }
-
-            ScrollMoreHint(
-                scrollState = detailScrollState,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 8.dp)
-            )
-        }
-    }
-}
-
-@SuppressLint("UseKtx")
-private fun normalizeAttachmentUri(rawUri: String): String? {
-    val trimmed = rawUri.trim()
-    if (trimmed.isEmpty()) return null
-
-    val parsedUri = trimmed.toUri()
-    val scheme = parsedUri.scheme?.lowercase()
-    if (scheme == "http" || scheme == "https") {
-        return parsedUri.toString()
-    }
-
-    return null
-}
-
-private fun buildShareText(anuncio: Mensaje): String {
-    val mensajePlano = htmlToShareText(anuncio.cuerpoHtml)
-    val adjuntosPlano = anuncio.adjuntos.mapNotNull { adjunto ->
-        val normalizedUri = normalizeAttachmentUri(adjunto.publicPath) ?: return@mapNotNull null
-        "${adjunto.nombre} ($normalizedUri)"
-    }
-
-    val sections = mutableListOf(
-        listOf(
-            anuncio.titulo,
-            anuncio.materia,
-            anuncio.fecha,
-            anuncio.autor
-        ).joinToString("\n")
-    )
-
-    if (mensajePlano.isNotBlank()) {
-        sections += mensajePlano
-    }
-
-    if (adjuntosPlano.isNotEmpty()) {
-        sections += buildString {
-            appendLine("Adjuntos:")
-            adjuntosPlano.forEach { appendLine(it) }
-        }.trimEnd()
-    }
-
-    return sections.joinToString("\n\n")
 }
