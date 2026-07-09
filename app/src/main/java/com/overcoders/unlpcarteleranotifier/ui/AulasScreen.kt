@@ -1,9 +1,5 @@
 package com.overcoders.unlpcarteleranotifier.ui
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,68 +34,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.overcoders.unlpcarteleranotifier.HeaderAction
-import com.overcoders.unlpcarteleranotifier.data.AppHttpClient
+import com.overcoders.unlpcarteleranotifier.data.AulasService
 import com.overcoders.unlpcarteleranotifier.model.AulaEstado
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import org.json.JSONArray
-import org.json.JSONObject
-
-private class AulasService(
-    private val client: OkHttpClient = AppHttpClient.instance,
-) {
-    private val url = "https://gestiondocente.info.unlp.edu.ar/reservas/api/consulta/estadoactual"
-
-    fun fetchEstadoActual(): List<AulaEstado> {
-        val request = Request.Builder()
-            .url(url)
-            .get()
-            .build()
-
-        client.newCall(request).execute().use { resp ->
-            if (!resp.isSuccessful) throw RuntimeException("HTTP ${resp.code}")
-            val body = resp.body.string()
-            if (body.isBlank()) return emptyList()
-
-            val json = JSONArray(body)
-            return buildList {
-                for (index in 0 until json.length()) {
-                    val row = json.optJSONObject(index) ?: continue
-                    val aula = row.optJSONObject("aula")
-                    val materia = row.optJSONObject("materia")
-                    val desde = row.optJSONObject("horaDesde")
-                    val hasta = row.optJSONObject("horaHasta")
-
-                    add(
-                        AulaEstado(
-                            aulaNombre = aula?.optString("nombre").orEmpty(),
-                            aulaId = aula?.optString("id").orEmpty(),
-                            materia = materia?.optString("nombre").orEmpty(),
-                            horaDesde = formatHour(desde),
-                            horaHasta = formatHour(hasta)
-                        )
-                    )
-                }
-            }
-        }
-    }
-
-    private fun formatHour(hourObj: JSONObject?): String {
-        val rawHour = hourObj?.optString("h").orEmpty().trim()
-        val rawMinute = hourObj?.optString("m").orEmpty().trim()
-        val hour = rawHour.toIntOrNull()
-        val minute = rawMinute.toIntOrNull()
-
-        if (hour == null || minute == null || hour !in 0..23 || minute !in 0..59) {
-            return "-"
-        }
-
-        return "%02d:%02d".format(hour, minute)
-    }
-}
 
 @Composable
 fun AulasScreen(
@@ -134,7 +73,7 @@ fun AulasScreen(
 
     val canShareAulas = !loading && error == null && aulas.isNotEmpty()
 
-    LaunchedEffect(loading, canShareAulas) {
+    LaunchedEffect(loading, canShareAulas, aulas) {
         onHeaderActionsChange(
             listOf(
                 HeaderAction(
@@ -142,15 +81,10 @@ fun AulasScreen(
                     contentDescription = "Copiar estado de aulas",
                     enabled = canShareAulas,
                     onClick = {
-                        val clipboard =
-                            context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(
-                            ClipData.newPlainText("Estado de aulas", buildShareText(aulas))
-                        )
-                        android.widget.Toast.makeText(
-                            context,
-                            "Copiado al portapapeles",
-                            android.widget.Toast.LENGTH_SHORT
+                        copyPlainText(
+                            context = context,
+                            label = "Estado de aulas",
+                            text = buildShareText(aulas)
                         )
                     }
                 ),
@@ -159,11 +93,11 @@ fun AulasScreen(
                     contentDescription = "Compartir estado de aulas",
                     enabled = canShareAulas,
                     onClick = {
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, buildShareText(aulas))
-                        }
-                        context.startActivity(Intent.createChooser(intent, "Compartir estado de aulas"))
+                        sharePlainText(
+                            context = context,
+                            text = buildShareText(aulas),
+                            chooserTitle = "Compartir estado de aulas"
+                        )
                     }
                 ),
                 HeaderAction(
