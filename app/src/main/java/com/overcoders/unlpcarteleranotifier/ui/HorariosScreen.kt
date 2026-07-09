@@ -1,10 +1,5 @@
 package com.overcoders.unlpcarteleranotifier.ui
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.content.Intent
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,19 +14,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -66,15 +56,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.IOException
-
-private val diasHabiles = listOf(
-    0 to "Lunes",
-    1 to "Martes",
-    2 to "Miércoles",
-    3 to "Jueves",
-    4 to "Viernes",
-    5 to "Sábado"
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -127,7 +108,6 @@ fun HorariosScreen(
         val materia = selectedMateria ?: return
         val id = materia.id.toIntOrNull() ?: return
 
-        // Una nueva selección invalida cualquier carga anterior todavía en curso.
         val previousJob = horariosJob
         horariosJob = null
         previousJob?.cancel()
@@ -137,14 +117,12 @@ fun HorariosScreen(
             error = null
             try {
                 val fetchedHorarios = horariosService.fetch(id, materia.nombre)
-                // Si el usuario cambió de materia mientras llegaba la respuesta, descartamos el resultado.
                 if (selectedMateria?.id != materia.id) return@launch
                 horarioMateria = fetchedHorarios
                 expandedDays.clear()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                // El error también puede pertenecer a una selección vieja ya descartada.
                 if (selectedMateria?.id != materia.id) return@launch
                 horarioMateria = null
                 error = when (e) {
@@ -152,7 +130,6 @@ fun HorariosScreen(
                     else -> "No se pudieron obtener los horarios."
                 }
             } finally {
-                // Sólo el job todavía vigente puede cerrar el loading o soltarse del estado compartido.
                 if (horariosJob === currentJob) {
                     loadingHorarios = false
                     horariosJob = null
@@ -182,45 +159,32 @@ fun HorariosScreen(
         }
     }
 
-    LaunchedEffect(canShareHorarios, loadingHorarios, selectedMateria) {
+    LaunchedEffect(canShareHorarios, loadingHorarios, selectedMateria, horarioMateria) {
         onHeaderActionsChange(
             listOf(
                 HeaderAction(
                     icon = Icons.Default.ContentCopy,
                     contentDescription = "Copiar reservas de aulas",
                     enabled = canShareHorarios,
-                    onClick = HeaderActionOnClick@{
-                        val horarios = horarioMateria ?: return@HeaderActionOnClick
-                        val clipboard =
-                            context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(
-                            ClipData.newPlainText(
-                                "Reservas de aulas",
-                                buildShareText(horarios)
-                            )
+                    onClick = copyClick@{
+                        val horarios = horarioMateria ?: return@copyClick
+                        copyPlainText(
+                            context = context,
+                            label = "Reservas de aulas",
+                            text = buildShareText(horarios)
                         )
-                        android.widget.Toast.makeText(
-                            context,
-                            "Copiado al portapapeles",
-                            android.widget.Toast.LENGTH_SHORT
-                        ).show()
                     }
                 ),
                 HeaderAction(
                     icon = Icons.Default.Share,
                     contentDescription = "Compartir reservas de aulas",
                     enabled = canShareHorarios,
-                    onClick = HeaderActionOnClick@{
-                        val horarios = horarioMateria ?: return@HeaderActionOnClick
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(
-                                Intent.EXTRA_TEXT,
-                                buildShareText(horarios)
-                            )
-                        }
-                        context.startActivity(
-                            Intent.createChooser(intent, "Compartir reservas de aulas")
+                    onClick = shareClick@{
+                        val horarios = horarioMateria ?: return@shareClick
+                        sharePlainText(
+                            context = context,
+                            text = buildShareText(horarios),
+                            chooserTitle = "Compartir reservas de aulas"
                         )
                     }
                 ),
@@ -246,7 +210,6 @@ fun HorariosScreen(
             .fillMaxSize()
             .padding(16.dp)
     ) {
-
         ExposedDropdownMenuBox(
             expanded = dropdownExpanded,
             onExpandedChange = { isExpanded ->
@@ -396,51 +359,12 @@ fun HorariosScreen(
                             .sortedWith(compareBy(HorarioReserva::horaInicio, HorarioReserva::horaFin, HorarioReserva::aula))
                         val isExpanded = expandedDays[diaNumero] == true
 
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = MaterialTheme.colorScheme.onSurface
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { expandedDays[diaNumero] = !isExpanded }
-                        ) {
-                            Column(Modifier.padding(12.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = diaNombre,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        val cantidadReservas = reservasDelDia.size
-                                        val etiquetaReservas = if (cantidadReservas == 1) "reserva" else "reservas"
-                                        Text(
-                                            text = "$cantidadReservas $etiquetaReservas",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Icon(
-                                            imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                            contentDescription = if (isExpanded) "Contraer" else "Expandir",
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-
-                                if (isExpanded) {
-                                    Spacer(Modifier.height(8.dp))
-                                    reservasDelDia.forEach { reserva ->
-                                        ReservaItem(reserva)
-                                        Spacer(Modifier.height(6.dp))
-                                    }
-                                }
-                            }
-                        }
+                        HorarioDiaCard(
+                            diaNombre = diaNombre,
+                            reservasDelDia = reservasDelDia,
+                            isExpanded = isExpanded,
+                            onToggle = { expandedDays[diaNumero] = !isExpanded }
+                        )
                     }
                 }
 
@@ -451,58 +375,6 @@ fun HorariosScreen(
                         .padding(bottom = 8.dp)
                 )
             }
-        }
-    }
-}
-
-private fun buildShareText(horarioMateria: HorarioMateria): String {
-    val reservas = horarioMateria.reservas
-        .sortedWith(compareBy(HorarioReserva::dia, HorarioReserva::horaInicio, HorarioReserva::horaFin, HorarioReserva::aula))
-
-    val lines = reservas.joinToString("\n") { reserva ->
-        val dia = diasHabiles.firstOrNull { it.first == reserva.dia }?.second ?: "Día ${reserva.dia}"
-        val estado = if (reserva.confirmada) "Confirmada" else "Sin confirmar"
-        "• $dia ${reserva.horaInicio}-${reserva.horaFin} | Aula ${reserva.aula} | ${reserva.tipo} | $estado"
-    }
-
-    return buildString {
-        appendLine("Reservas de aulas")
-        appendLine(horarioMateria.materiaNombre)
-        appendLine("Período: ${horarioMateria.periodo.nombre} (${horarioMateria.periodo.desde} - ${horarioMateria.periodo.hasta})")
-        appendLine()
-        append(lines)
-    }.trim()
-}
-
-@Composable
-private fun ReservaItem(reserva: HorarioReserva) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurface
-        )
-    ) {
-        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(
-                    text = "${reserva.horaInicio} - ${reserva.horaFin}",
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = if (reserva.confirmada) "Confirmada" else "Sin confirmar",
-                    color = if (reserva.confirmada) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.error
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Text("Aula: ${reserva.aula}", color = MaterialTheme.colorScheme.onSurface)
-            Text("Tipo: ${reserva.tipo}", color = MaterialTheme.colorScheme.onSurface)
         }
     }
 }
