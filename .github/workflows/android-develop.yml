@@ -1,5 +1,5 @@
 # Verifica develop y publica los pushes en el track de testing.
-name: Android develop - internal testing
+name: Android develop - open testing
 
 on:
   push:
