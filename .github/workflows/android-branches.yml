@@ -20,6 +20,7 @@ concurrency:
 
 jobs:
   verify:
+    name: Android branch verification
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
