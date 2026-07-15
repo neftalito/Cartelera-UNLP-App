@@ -144,7 +144,7 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.overcoders.unlpcarteleranotifier
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
-          tracks: qa
+          tracks: beta
           status: completed
           changesNotSentForReview: false
 

@@ -217,7 +217,7 @@ También requiere estas Repository Variables con la configuración Firebase real
 - `FIREBASE_API_KEY`
 - `FIREBASE_GCM_SENDER_ID`
 
-La publicación usa `qa`, el identificador de Google Play para el track de internal
+La publicación usa `beta`, el identificador de Google Play para el track de open
 testing. La service account debe tener habilitada la API Android Publisher y
 permisos de publicación sobre esta aplicación en Play Console.
 
