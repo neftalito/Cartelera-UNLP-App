@@ -1,0 +1,50 @@
+version: 2
+
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+    labels:
+      - "dependencies"
+      - "github-actions"
+
+    commit-message:
+      prefix: "ci"
+
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+
+    open-pull-requests-limit: 10
+
+    groups:
+      compose:
+        patterns:
+          - "androidx.compose:*"
+          - "androidx.compose.*:*"
+
+      androidx:
+        patterns:
+          - "androidx.*:*"
+
+      firebase:
+        patterns:
+          - "com.google.firebase:*"
+          - "com.google.gms:*"
+
+    labels:
+      - "dependencies"
+      - "gradle"
+
+    commit-message:
+      prefix: "deps"

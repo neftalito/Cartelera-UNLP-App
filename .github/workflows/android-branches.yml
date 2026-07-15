@@ -1,0 +1,54 @@
+# Verifica ramas que no publican en Google Play.
+name: Android checks - branches
+
+on:
+  push:
+    branches-ignore:
+      - main
+      - develop
+  pull_request:
+    branches-ignore:
+      - main
+      - develop
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-branches-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Create non-production Firebase config
+        run: |
+          printf '%s\n' \
+            'firebase.projectId=ci-cartelera-checks' \
+            'firebase.applicationId=1:123456789012:android:0123456789abcdef' \
+            'firebase.apiKey=AIza00000000000000000000000000000000000' \
+            'firebase.gcmSenderId=123456789012' \
+            > private-local.properties
+
+      - name: Run unit tests, lint and build checks
+        run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease :app:assembleDebugAndroidTest --no-daemon

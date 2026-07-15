@@ -79,6 +79,26 @@ val releaseFirebaseConfigurationErrors = buildList {
 }
 val firebaseConfigurationValid = releaseFirebaseConfigurationErrors.isEmpty()
 
+val releaseStoreFilePath = providers.gradleProperty("RELEASE_STORE_FILE").orNull
+val releaseStorePassword = providers.gradleProperty("RELEASE_STORE_PASSWORD").orNull
+val releaseKeyAlias = providers.gradleProperty("RELEASE_KEY_ALIAS").orNull
+val releaseKeyPassword = providers.gradleProperty("RELEASE_KEY_PASSWORD").orNull
+val releaseSigningRequired =
+    providers.gradleProperty("REQUIRE_RELEASE_SIGNING").orNull?.toBooleanStrictOrNull() == true
+val releaseSigningConfigured = listOf(
+    releaseStoreFilePath,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { !it.isNullOrEmpty() }
+
+if (releaseSigningRequired && !releaseSigningConfigured) {
+    throw GradleException(
+        "La firma release es obligatoria, pero faltan propiedades RELEASE_STORE_FILE, " +
+            "RELEASE_STORE_PASSWORD, RELEASE_KEY_ALIAS o RELEASE_KEY_PASSWORD."
+    )
+}
+
 val releaseTaskRequested = gradle.startParameter.taskNames.any { requestedTask ->
     val taskName = requestedTask.substringAfterLast(':')
     taskName.contains("release", ignoreCase = true) ||
@@ -136,8 +156,22 @@ android {
         )
     }
 
+    signingConfigs {
+        if (releaseSigningConfigured) {
+            create("release") {
+                storeFile = rootProject.file(requireNotNull(releaseStoreFilePath))
+                storePassword = requireNotNull(releaseStorePassword)
+                keyAlias = requireNotNull(releaseKeyAlias)
+                keyPassword = requireNotNull(releaseKeyPassword)
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
 

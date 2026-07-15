@@ -175,24 +175,53 @@ Gradle valida en un único paso el formato de los cuatro valores, incluida la fo
 `AIza...` de la API key, y también que `applicationId` y `gcmSenderId` pertenezcan al
 mismo número de proyecto. El runtime reutiliza ese resultado antes de inicializar Firebase.
 
-### Release firmada
+### Integración continua y publicación
 
-`assembleRelease` valida la configuración Firebase, aplica R8 y genera un APK
-release sin firma. Ese archivo sirve para verificar la compilación, pero no debe
-distribuirse.
+El repositorio separa la verificación y la publicación en tres workflows:
 
-Para publicar una versión:
+- `android-branches.yml`: ramas distintas de `main` y `develop`; ejecuta tests
+  unitarios, lint y builds de verificación, sin abrir un emulador.
+- `android-develop.yml`: ejecuta además los tests instrumentados y, después de un
+  push exitoso a `develop`, publica el AAB firmado en el track de testing de
+  Google Play.
+- `android-main.yml`: ejecuta además los tests instrumentados en los pushes y
+  pull requests de `main`, sin generar un AAB firmado ni publicar en Google Play.
 
-1. Confirmar `versionCode` y `versionName` en `app/build.gradle.kts`.
-2. Usar **Build > Generate Signed App Bundle or APK** en Android Studio.
-3. Elegir **Android App Bundle** para Google Play y firmar con el keystore de
-   producción, que debe permanecer fuera del repositorio.
-4. Verificar que la metadata del artefacto corresponda a la versión actual antes
-   de subirlo. Los APK/AAB guardados en `app/release` son artefactos locales y no
-   deben reutilizarse como fuente de una release nueva.
+Los pull requests hacia `main` o `develop` también ejecutan todos los tests, pero
+nunca publican. La única publicación automática ocurre después de un push exitoso
+a `develop` y queda limitada al track de internal testing.
 
-La configuración de firma y sus contraseñas no se versionan. El repositorio
-ignora `*.jks`, `*.keystore`, `keystore.properties` y `key.properties`.
+La publicación en producción se realiza manualmente desde Play Console,
+promocionando el AAB que ya fue validado en internal testing. De esta forma se
+publica exactamente el mismo artefacto, sin reconstruirlo ni volver a subirlo.
+
+El workflow de publicación de `develop` requiere estos Repository Secrets:
+
+- `ANDROID_KEYSTORE_BASE64`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+- `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`
+
+También requiere estas Repository Variables con la configuración Firebase real:
+
+- `FIREBASE_PROJECT_ID`
+- `FIREBASE_APPLICATION_ID`
+- `FIREBASE_API_KEY`
+- `FIREBASE_GCM_SENDER_ID`
+
+La publicación usa `qa`, el identificador de Google Play para el track de internal
+testing. La service account debe tener habilitada la API Android Publisher y
+permisos de publicación sobre esta aplicación en Play Console.
+
+`versionCode` y `versionName` se mantienen en `app/build.gradle.kts`. El AAB de
+testing usa exactamente esos valores declarados en Gradle y los conserva cuando
+se promociona manualmente a producción.
+
+Sin las propiedades de firma, `assembleRelease` sigue generando sólo un APK de
+verificación sin firma. La configuración de firma y sus contraseñas no se
+versionan; el repositorio ignora `*.jks`, `*.keystore`, `keystore.properties` y
+`key.properties`.
 
 ### Comandos útiles
 

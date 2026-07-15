@@ -1,0 +1,150 @@
+# Verifica develop y publica los pushes en el track de testing.
+name: Android develop - internal testing
+
+on:
+  push:
+    branches:
+      - develop
+  pull_request:
+    branches:
+      - develop
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: android-develop-verify-${{ github.ref }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Create non-production Firebase config
+        run: |
+          printf '%s\n' \
+            'firebase.projectId=ci-cartelera-checks' \
+            'firebase.applicationId=1:123456789012:android:0123456789abcdef' \
+            'firebase.apiKey=AIza00000000000000000000000000000000000' \
+            'firebase.gcmSenderId=123456789012' \
+            > private-local.properties
+
+      - name: Run unit tests, lint and build checks
+        run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease :app:assembleDebugAndroidTest --no-daemon
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run instrumented tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          arch: x86_64
+          disable-animations: true
+          script: ./gradlew :app:connectedDebugAndroidTest --no-daemon
+
+  publish:
+    if: ${{ github.event_name == 'push' && needs.verify.result == 'success' }}
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: google-play-com.overcoders.unlpcarteleranotifier
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Create production Firebase config
+        env:
+          FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+          FIREBASE_APPLICATION_ID: ${{ vars.FIREBASE_APPLICATION_ID }}
+          FIREBASE_API_KEY: ${{ vars.FIREBASE_API_KEY }}
+          FIREBASE_GCM_SENDER_ID: ${{ vars.FIREBASE_GCM_SENDER_ID }}
+        run: |
+          set -euo pipefail
+          : "${FIREBASE_PROJECT_ID:?Missing repository variable FIREBASE_PROJECT_ID}"
+          : "${FIREBASE_APPLICATION_ID:?Missing repository variable FIREBASE_APPLICATION_ID}"
+          : "${FIREBASE_API_KEY:?Missing repository variable FIREBASE_API_KEY}"
+          : "${FIREBASE_GCM_SENDER_ID:?Missing repository variable FIREBASE_GCM_SENDER_ID}"
+          printf 'firebase.projectId=%s\nfirebase.applicationId=%s\nfirebase.apiKey=%s\nfirebase.gcmSenderId=%s\n' \
+            "$FIREBASE_PROJECT_ID" \
+            "$FIREBASE_APPLICATION_ID" \
+            "$FIREBASE_API_KEY" \
+            "$FIREBASE_GCM_SENDER_ID" \
+            > private-local.properties
+
+      - name: Decode and validate release keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          : "${ANDROID_KEYSTORE_BASE64:?Missing secret ANDROID_KEYSTORE_BASE64}"
+          : "${ANDROID_KEYSTORE_PASSWORD:?Missing secret ANDROID_KEYSTORE_PASSWORD}"
+          : "${ANDROID_KEY_ALIAS:?Missing secret ANDROID_KEY_ALIAS}"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          keytool -list \
+            -keystore "$RUNNER_TEMP/release.jks" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" \
+            > /dev/null
+
+      - name: Build signed app bundle
+        env:
+          ORG_GRADLE_PROJECT_REQUIRE_RELEASE_SIGNING: "true"
+          ORG_GRADLE_PROJECT_RELEASE_STORE_FILE: ${{ runner.temp }}/release.jks
+          ORG_GRADLE_PROJECT_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ORG_GRADLE_PROJECT_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ORG_GRADLE_PROJECT_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew :app:bundleRelease --no-daemon
+
+      - name: Publish to Google Play testing track
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.overcoders.unlpcarteleranotifier
+          releaseFiles: app/build/outputs/bundle/release/app-release.aab
+          tracks: qa
+          status: completed
+          changesNotSentForReview: false
+
+      - name: Remove release keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
