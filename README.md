@@ -182,14 +182,21 @@ El repositorio separa la verificación y la publicación en tres workflows:
 - `android-branches.yml`: ramas distintas de `main` y `develop`; ejecuta tests
   unitarios, lint y builds de verificación, sin abrir un emulador.
 - `android-develop.yml`: ejecuta además los tests instrumentados y, después de un
-  push exitoso a `develop`, publica el AAB firmado en el track de testing de
-  Google Play.
+  push exitoso a `develop`, deja la publicación esperando aprobación manual. Al
+  aprobarla, genera el AAB firmado y lo publica en internal testing de Google Play.
 - `android-main.yml`: ejecuta además los tests instrumentados en los pushes y
   pull requests de `main`, sin generar un AAB firmado ni publicar en Google Play.
 
 Los pull requests hacia `main` o `develop` también ejecutan todos los tests, pero
-nunca publican. La única publicación automática ocurre después de un push exitoso
-a `develop` y queda limitada al track de internal testing.
+nunca publican. En los pushes a `develop`, el job `publish` sólo puede comenzar
+después de que `verify` termine correctamente y se apruebe manualmente el
+environment `google-play-internal`.
+
+Ese environment debe configurarse una vez en **Settings > Environments** con
+**Required reviewers** y con los despliegues restringidos a la rama `develop`.
+Si la misma persona que hizo el push debe poder aprobarlo, **Prevent self-review**
+debe quedar desactivado. Sin un reviewer requerido, referenciar el environment en
+el workflow no agrega por sí solo una aprobación obligatoria.
 
 La publicación en producción se realiza manualmente desde Play Console,
 promocionando el AAB que ya fue validado en internal testing. De esta forma se

@@ -65,8 +65,10 @@ jobs:
           script: ./gradlew :app:connectedDebugAndroidTest --no-daemon
 
   publish:
-    if: ${{ github.event_name == 'push' && needs.verify.result == 'success' }}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' && needs.verify.result == 'success' }}
     needs: verify
+    environment:
+      name: google-play-internal
     runs-on: ubuntu-latest
     timeout-minutes: 30
     concurrency:
