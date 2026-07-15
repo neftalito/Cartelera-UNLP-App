@@ -1,3 +1,4 @@
+/** Convierte HTML en texto legible y seguro para mostrar o compartir. */
 package com.overcoders.unlpcarteleranotifier.ui
 
 import android.text.Spannable
@@ -6,6 +7,8 @@ import android.text.style.BackgroundColorSpan
 import android.text.style.ForegroundColorSpan
 import android.text.style.URLSpan
 import androidx.core.text.HtmlCompat
+import java.net.URI
+import java.util.Locale
 
 internal fun parseHtmlWithoutTextColors(html: String): Spanned {
     val parsed = HtmlCompat.fromHtml(html, HtmlCompat.FROM_HTML_MODE_LEGACY)
@@ -15,6 +18,14 @@ internal fun parseHtmlWithoutTextColors(html: String): Spanned {
         }
         parsed.getSpans(0, parsed.length, BackgroundColorSpan::class.java).forEach { span ->
             parsed.removeSpan(span)
+        }
+        parsed.getSpans(0, parsed.length, URLSpan::class.java).forEach { span ->
+            val scheme = runCatching {
+                URI(span.url).scheme?.lowercase(Locale.US)
+            }.getOrNull()
+            if (scheme != "http" && scheme != "https") {
+                parsed.removeSpan(span)
+            }
         }
     }
     return parsed

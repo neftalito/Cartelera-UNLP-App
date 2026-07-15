@@ -1,0 +1,64 @@
+# Ejecuta las verificaciones reproducibles de la aplicación en cada integración.
+name: Android checks
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - '**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Create non-production Firebase config for release verification
+        run: |
+          printf '%s\n' \
+            'firebase.projectId=ci-cartelera-checks' \
+            'firebase.applicationId=1:123456789012:android:0123456789abcdef' \
+            'firebase.apiKey=AIza00000000000000000000000000000000000' \
+            'firebase.gcmSenderId=123456789012' \
+            > private-local.properties
+
+      - name: Run unit tests, lint and debug/release builds
+        run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease :app:assembleDebugAndroidTest --no-daemon
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run instrumented tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          disable-animations: true
+          script: ./gradlew :app:connectedDebugAndroidTest --no-daemon

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Define el tema de arranque nocturno para evitar destellos claros antes de Compose. -->
+<resources>
+
+    <!-- Evita un destello claro mientras Compose inicializa el esquema nocturno. -->
+    <style name="Theme.UNLPCarteleraNotifier" parent="android:Theme.Material.NoActionBar" />
+</resources>

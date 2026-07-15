@@ -1,7 +1,10 @@
+/**
+ * Descarga y convierte la tabla remota de cursadas en modelos validados de la aplicación.
+ */
 package com.overcoders.unlpcarteleranotifier.data
 
 import com.overcoders.unlpcarteleranotifier.model.CursadaInfo
-import java.security.MessageDigest
+import com.overcoders.unlpcarteleranotifier.model.cursadaMateriaKey
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -11,12 +14,12 @@ import okhttp3.Request
 import org.jsoup.Jsoup
 
 /**
- * Descarga la tabla pública de cursadas, la normaliza a un modelo estable y genera un hash
- * del HTML relevante para detectar cambios remotos de forma barata en sincronizaciones futuras.
+ * Descarga la tabla pública de cursadas y la normaliza a un modelo estable.
  */
-class CursadasService(
-    private val client: OkHttpClient = AppHttpClient.instance,
-) {
+class CursadasService(client: OkHttpClient? = null) {
+    private val client: OkHttpClient by lazy {
+        client ?: AppHttpClient.instance
+    }
     private val url = "https://gestiondocente.info.unlp.edu.ar/cursadas/"
     private val formatter = DateTimeFormatter.ofPattern(
         "dd/MM/yyyy HH:mm",
@@ -26,80 +29,74 @@ class CursadasService(
             .build()
     )
 
-    data class FetchResult(
-        val cursadas: List<CursadaInfo>,
-        val tableHash: String
-    )
-
-    fun fetchAndParse(): FetchResult {
+    suspend fun fetchAndParse(): List<CursadaInfo> {
         val request = Request.Builder()
             .url(url)
             .get()
             .build()
 
-        client.newCall(request).execute().use { resp ->
-            if (!resp.isSuccessful) throw RuntimeException("HTTP ${resp.code}")
-            val html = resp.body.string()
-            if (html.isBlank()) return FetchResult(emptyList(), "")
-
-            val doc = Jsoup.parse(html)
-
-            // La página puede incluir otras tablas auxiliares. Anclamos la búsqueda a la que
-            // contiene el encabezado "Materia", que es la fuente real de la sección.
-            val mainTable = doc.selectFirst(
-                "table:has(> thead > tr > th:matchesOwn(^\\s*Materia\\s*$))"
-            ) ?: return FetchResult(emptyList(), "")
-
-            val rows = mainTable.select("> tbody > tr")
-
-            val cursadas = rows.mapNotNull { row ->
-                val cells = row.select("> td")
-                if (cells.size < 5) return@mapNotNull null
-
-                val materia = cells[0].text().trim()
-                if (materia.isBlank()) return@mapNotNull null
-
-                val inicioHtml = normalizedCellHtml(cells[2])
-                val horariosHtml = cells[3].html().trim()
-                val ultimaModificacion = cells[4].text().trim()
-
-                val hasDate = ultimaModificacion.isNotBlank()
-                val hasInicioInfo = Jsoup.parse(inicioHtml).text().isNotBlank()
-                val hasHorariosInfo = Jsoup.parse(horariosHtml).text().isNotBlank()
-                if (!hasDate && !hasInicioInfo && !hasHorariosInfo) return@mapNotNull null
-
-                CursadaInfo(
-                    materia = materia,
-                    inicioCursadaHtml = inicioHtml,
-                    horariosCursadaHtml = horariosHtml,
-                    ultimaModificacion = ultimaModificacion,
-                    ultimaModificacionEpochMillis = parseDate(ultimaModificacion)
-                )
-            }.sortedWith(
-                compareByDescending<CursadaInfo> { it.ultimaModificacionEpochMillis ?: Long.MIN_VALUE }
-                    .thenBy { it.materia.lowercase() }
-            )
-
-            // Hashamos el HTML de cada fila para detectar cambios aunque el orden visual o el
-            // modelo derivado se mantengan similares entre dos descargas consecutivas.
-            val fullHtmlForHash = rows.joinToString("\n") { it.outerHtml() }
-            return FetchResult(cursadas = cursadas, tableHash = sha256(fullHtmlForHash))
-        }
+        return client.awaitParsedBody(request, ::parse)
     }
 
+    internal fun parse(html: String): List<CursadaInfo> {
+        check(html.isNotBlank()) { "La respuesta de cursadas está vacía." }
+        val doc = Jsoup.parse(html)
+
+        // La página puede incluir otras tablas auxiliares. Anclamos la búsqueda a la que
+        // contiene el encabezado "Materia", que es la fuente real de la sección.
+        val mainTable = checkNotNull(doc.selectFirst(
+            "table:has(> thead > tr > th:matchesOwn(^\\s*Materia\\s*$))"
+        )) { "No se encontró la tabla de cursadas." }
+
+        val rows = mainTable.select("> tbody > tr")
+
+        var recognizedRowCount = 0
+        val parsedRows = rows.mapNotNull { row ->
+            val cells = row.select("> td")
+            if (cells.size < 5) return@mapNotNull null
+
+            val materia = cells[0].text().trim()
+            if (materia.isBlank()) return@mapNotNull null
+            recognizedRowCount += 1
+
+            val inicioHtml = normalizedCellHtml(cells[2])
+            val horariosHtml = cells[3].html().trim()
+            val ultimaModificacion = cells[4].text().trim()
+
+            val hasDate = ultimaModificacion.isNotBlank()
+            val hasInicioInfo = Jsoup.parse(inicioHtml).text().isNotBlank()
+            val hasHorariosInfo = Jsoup.parse(horariosHtml).text().isNotBlank()
+            if (!hasDate && !hasInicioInfo && !hasHorariosInfo) return@mapNotNull null
+
+            CursadaInfo(
+                materia = materia,
+                inicioCursadaHtml = inicioHtml,
+                horariosCursadaHtml = horariosHtml,
+                ultimaModificacion = ultimaModificacion,
+                ultimaModificacionEpochMillis = parseDate(ultimaModificacion)
+            )
+        }
+
+        check(rows.isEmpty() || recognizedRowCount > 0) {
+            "La tabla de cursadas contiene filas, pero ninguna tiene el formato esperado."
+        }
+
+        return parsedRows.sortedWith(
+            compareByDescending<CursadaInfo> { it.ultimaModificacionEpochMillis ?: Long.MIN_VALUE }
+                .thenBy { it.materia.cursadaMateriaKey() }
+        ).distinctBy { it.materia.cursadaMateriaKey() }
+    }
 
     private fun parseDate(value: String): Long? {
         if (value.isBlank()) return null
         return runCatching {
             val localDateTime = LocalDateTime.parse(value, formatter)
-            localDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            localDateTime.atZone(CARTELERA_ZONE).toInstant().toEpochMilli()
         }.getOrNull()
     }
 
-    private fun sha256(value: String): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-            .digest(value.toByteArray())
-        return digest.joinToString("") { "%02x".format(it) }
+    private companion object {
+        val CARTELERA_ZONE: ZoneId = ZoneId.of("America/Argentina/Buenos_Aires")
     }
 
     // Algunas celdas vienen como una tabla anidada. La aplanamos para reutilizar ese HTML en
@@ -113,5 +110,4 @@ class CursadasService(
 
         return parts.joinToString("<br/>").trim()
     }
-
 }

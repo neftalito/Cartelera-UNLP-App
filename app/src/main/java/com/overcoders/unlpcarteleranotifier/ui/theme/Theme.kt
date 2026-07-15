@@ -1,3 +1,4 @@
+/** Configura los esquemas claro, oscuro y dinámico de la aplicación. */
 package com.overcoders.unlpcarteleranotifier.ui.theme
 
 import android.os.Build

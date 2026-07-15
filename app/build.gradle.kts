@@ -1,3 +1,4 @@
+// Configura variantes, dependencias y validaciones de build de la aplicación Android.
 import java.util.Properties
 
 plugins {
@@ -13,11 +14,82 @@ val privateLocalProperties = Properties().apply {
 }
 
 fun privateProperty(name: String, defaultValue: String): String {
-    return privateLocalProperties.getProperty(name, defaultValue)
+    return privateLocalProperties.getProperty(name, defaultValue).trim()
 }
 
 fun String.asBuildConfigString(): String {
     return "\"${replace("\\", "\\\\").replace("\"", "\\\"")}\""
+}
+
+val firebaseProjectId = privateProperty("firebase.projectId", "example-cartelera-project")
+val firebaseApplicationId =
+    privateProperty("firebase.applicationId", "1:1234567890:android:exampleapp123456")
+val firebaseApiKey = privateProperty("firebase.apiKey", "example-android-api-key")
+val firebaseGcmSenderId = privateProperty("firebase.gcmSenderId", "1234567890")
+
+val firebaseProjectIdPattern = Regex("[a-z][a-z0-9-]{4,28}[a-z0-9]")
+val firebaseApplicationIdPattern = Regex("1:(\\d{6,20}):android:[A-Za-z0-9]+")
+val firebaseApiKeyPattern = Regex("AIza[0-9A-Za-z_-]{35}")
+val firebaseGcmSenderIdPattern = Regex("\\d{6,20}")
+
+fun String.isValidFirebaseProjectId(): Boolean =
+    !startsWith("example-", ignoreCase = true) && firebaseProjectIdPattern.matches(this)
+
+fun String.isValidFirebaseApplicationId(): Boolean =
+    !contains(":android:exampleapp", ignoreCase = true) &&
+        firebaseApplicationIdPattern.matches(this)
+
+fun String.isValidFirebaseApiKey(): Boolean =
+    firebaseApiKeyPattern.matches(this)
+
+fun String.isValidFirebaseGcmSenderId(): Boolean =
+    this != "1234567890" && firebaseGcmSenderIdPattern.matches(this)
+
+fun firebaseProjectNumberFromApplicationId(applicationId: String): String? =
+    firebaseApplicationIdPattern.matchEntire(applicationId)?.groupValues?.get(1)
+
+fun firebaseProjectNumbersMatch(applicationId: String, gcmSenderId: String): Boolean =
+    firebaseProjectNumberFromApplicationId(applicationId) == gcmSenderId
+
+val invalidReleaseFirebaseProperties = listOf(
+    "firebase.projectId" to firebaseProjectId.isValidFirebaseProjectId(),
+    "firebase.applicationId" to firebaseApplicationId.isValidFirebaseApplicationId(),
+    "firebase.apiKey" to firebaseApiKey.isValidFirebaseApiKey(),
+    "firebase.gcmSenderId" to firebaseGcmSenderId.isValidFirebaseGcmSenderId(),
+).filterNot { (_, isValid) -> isValid }
+    .map { (name, _) -> name }
+
+val releaseFirebaseConfigurationErrors = buildList {
+    if (invalidReleaseFirebaseProperties.isNotEmpty()) {
+        add(
+            "Propiedades ausentes o inválidas en private-local.properties: " +
+                invalidReleaseFirebaseProperties.joinToString()
+        )
+    }
+    if (
+        firebaseApplicationId.isValidFirebaseApplicationId() &&
+        firebaseGcmSenderId.isValidFirebaseGcmSenderId() &&
+        !firebaseProjectNumbersMatch(firebaseApplicationId, firebaseGcmSenderId)
+    ) {
+        add(
+            "firebase.applicationId y firebase.gcmSenderId deben usar exactamente " +
+                "el mismo número de proyecto Firebase."
+        )
+    }
+}
+val firebaseConfigurationValid = releaseFirebaseConfigurationErrors.isEmpty()
+
+val releaseTaskRequested = gradle.startParameter.taskNames.any { requestedTask ->
+    val taskName = requestedTask.substringAfterLast(':')
+    taskName.contains("release", ignoreCase = true) ||
+        taskName.lowercase() in setOf("assemble", "build", "bundle")
+}
+
+if (releaseTaskRequested && releaseFirebaseConfigurationErrors.isNotEmpty()) {
+    throw GradleException(
+        "No se puede compilar release por errores en la configuración Firebase:\n- " +
+            releaseFirebaseConfigurationErrors.joinToString("\n- ")
+    )
 }
 
 android {
@@ -31,59 +103,40 @@ android {
         minSdk = 23
         //noinspection OldTargetApi
         targetSdk = 36
-        versionCode = 22
-        versionName = "2.0.2"
+        versionCode = 25
+        versionName = "2.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField(
             "String",
             "FIREBASE_PROJECT_ID",
-            privateProperty("firebase.projectId", "example-cartelera-project").asBuildConfigString()
+            firebaseProjectId.asBuildConfigString()
         )
         buildConfigField(
             "String",
             "FIREBASE_APPLICATION_ID",
-            privateProperty("firebase.applicationId", "1:1234567890:android:exampleapp123456").asBuildConfigString()
+            firebaseApplicationId.asBuildConfigString()
         )
         buildConfigField(
             "String",
             "FIREBASE_API_KEY",
-            privateProperty("firebase.apiKey", "example-android-api-key").asBuildConfigString()
+            firebaseApiKey.asBuildConfigString()
         )
         buildConfigField(
             "String",
             "FIREBASE_GCM_SENDER_ID",
-            privateProperty("firebase.gcmSenderId", "1234567890").asBuildConfigString()
+            firebaseGcmSenderId.asBuildConfigString()
         )
+        // El runtime consume el resultado de esta misma validación para evitar reglas distintas.
         buildConfigField(
-            "String",
-            "FIREBASE_SERVER_BASE_URL",
-            "\"\""
-        )
-        buildConfigField(
-            "String",
-            "FIREBASE_SERVER_API_TOKEN",
-            "\"\""
+            "boolean",
+            "FIREBASE_CONFIGURATION_VALID",
+            firebaseConfigurationValid.toString()
         )
     }
 
     buildTypes {
-        debug {
-            buildConfigField(
-                "String",
-                "FIREBASE_SERVER_BASE_URL",
-                privateProperty(
-                    "firebase.serverBaseUrl",
-                    "https://your-firebase-sync-server.example.com"
-                ).asBuildConfigString()
-            )
-            buildConfigField(
-                "String",
-                "FIREBASE_SERVER_API_TOKEN",
-                privateProperty("firebase.serverApiToken", "").asBuildConfigString()
-            )
-        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -111,26 +164,21 @@ android {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.compose.material3.adaptive.navigation.suite)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.okhttp)
     implementation(libs.jsoup)
     implementation(libs.firebase.messaging)
     implementation(libs.androidx.datastore.preferences)
-    // Compatibilidad transitoria: hoy WorkManager solo queda para cancelar trabajos legacy.
-    // Cuando se eliminen `BootReceiver` y `cancelLegacyPolling`, esta dependencia debería salir.
-    implementation(libs.androidx.work.runtime.ktx)
-    implementation(libs.androidx.fragment.ktx)
     testImplementation(libs.junit)
+    testImplementation(libs.json)
     androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)

@@ -1,3 +1,4 @@
+/** Define la tipografía utilizada por el tema Material de la aplicación. */
 package com.overcoders.unlpcarteleranotifier.ui.theme
 
 import androidx.compose.material3.Typography

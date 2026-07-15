@@ -1,4 +1,7 @@
+/** Construye y valida los nombres de tópicos FCM usados por la app. */
 package com.overcoders.unlpcarteleranotifier.push
+
+import com.overcoders.unlpcarteleranotifier.model.toMateriaCatalogIdOrNull
 
 /**
  * Nombres de topics compartidos por cliente Android y backend Python.
@@ -8,9 +11,8 @@ object FirebaseTopics {
     const val AVISOS = "avisos_all"
     private const val MATERIA_PREFIX = "materia_"
 
-    fun forMateria(idMateria: String): String {
-        return MATERIA_PREFIX + idMateria.trim().replace("[^A-Za-z0-9\\-_.~%]".toRegex(), "_")
-    }
+    internal fun forMateria(idMateria: String): String? =
+        idMateria.toMateriaCatalogIdOrNull()?.let { id -> "$MATERIA_PREFIX$id" }
 
     fun desiredTopics(
         notifyAll: Boolean,
@@ -21,8 +23,7 @@ object FirebaseTopics {
             setOf(ALL_MATERIAS)
         } else {
             subscribedMateriaIds
-                .filter { it.isNotBlank() }
-                .map(::forMateria)
+                .mapNotNull(::forMateria)
                 .toSet()
         }
         return materiasTopics + AVISOS

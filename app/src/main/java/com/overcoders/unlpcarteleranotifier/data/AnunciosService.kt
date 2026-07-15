@@ -1,3 +1,4 @@
+/** Descarga y convierte las páginas JSON de anuncios de cartelera. */
 package com.overcoders.unlpcarteleranotifier.data
 
 import com.overcoders.unlpcarteleranotifier.model.Adjunto
@@ -6,19 +7,16 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 
-class ApiException(
-    val httpCode: Int?,
-    message: String
-) : RuntimeException(message)
-
-class AnunciosService(
-    private val client: OkHttpClient = AppHttpClient.instance,
-) {
+class AnunciosService(client: OkHttpClient? = null) {
+    private val client: OkHttpClient by lazy {
+        client ?: AppHttpClient.instance
+    }
     private val baseUrl = "https://gestiondocente.info.unlp.edu.ar/cartelera/data"
 
     data class FetchResult(
         val total: Int,
-        val mensajes: List<Mensaje>
+        val mensajes: List<Mensaje>,
+        val receivedCount: Int,
     )
 
     /**
@@ -26,7 +24,7 @@ class AnunciosService(
      * @param cantidad cantidad de elementos a solicitar desde el offset
      * @param idMateria si es null o vacío => feed global. Si no, filtra por materia.
      */
-    fun fetch(
+    suspend fun fetch(
         desde: Int,
         cantidad: Int,
         idMateria: Int? = null
@@ -42,57 +40,62 @@ class AnunciosService(
             .header("Accept", "application/json")
             .build()
 
-        client.newCall(request).execute().use { resp ->
-            if (!resp.isSuccessful) {
-                throw ApiException(resp.code, "HTTP ${resp.code} - ${resp.message}")
-            }
+        return client.awaitParsedBody(request, ::parse)
+    }
 
-            val body = resp.body.string()
+    internal fun parse(body: String): FetchResult {
+        val root = JSONObject(body)
+        val total = root.optInt("total", 0).coerceAtLeast(0)
+        val mensajesJson = root.getJSONArray("mensajes")
 
-            val root = JSONObject(body)
-            val total = root.optInt("total", 0)
-            val mensajesJson = root.getJSONArray("mensajes")
+        val out = ArrayList<Mensaje>(mensajesJson.length())
 
-            val out = ArrayList<Mensaje>(mensajesJson.length())
+        for (i in 0 until mensajesJson.length()) {
+            val item = mensajesJson.optJSONObject(i) ?: continue
 
-            for (i in 0 until mensajesJson.length()) {
-                val item = mensajesJson.getJSONObject(i)
-
-                val materia = item.optString("materia", "")
-                val titulo = item.optString("titulo", "")
-                val cuerpoHtml = item.optString("cuerpo", "")
-                val fecha = item.optString("fecha", "")
-                val autor = item.optString("autor", "").trim()
-                val isAnulado = item.optBoolean("is_anulado", false)
-                val adjuntosJson = item.optJSONArray("adjuntos")
-                val adjuntos = buildList {
-                    if (adjuntosJson != null) {
-                        for (j in 0 until adjuntosJson.length()) {
-                            val adjunto = adjuntosJson.optJSONObject(j) ?: continue
-                            val nombre = adjunto.optString("nombre", "").trim()
-                            val publicPath = adjunto.optString("public_path", "").trim()
-                            if (nombre.isNotEmpty() && publicPath.isNotEmpty()) {
-                                add(Adjunto(nombre = nombre, publicPath = publicPath))
-                            }
+            val materia = item.optString("materia", "").trim()
+            val titulo = item.optString("titulo", "").trim()
+            val cuerpoHtml = item.optString("cuerpo", "")
+            val fecha = item.optString("fecha", "").trim()
+            val autor = item.optString("autor", "").trim()
+            if (materia.isEmpty() || titulo.isEmpty() || fecha.isEmpty()) continue
+            val isAnulado = item.optBoolean("is_anulado", false)
+            val adjuntosJson = item.optJSONArray("adjuntos")
+            val adjuntos = buildList {
+                if (adjuntosJson != null) {
+                    for (j in 0 until adjuntosJson.length()) {
+                        val adjunto = adjuntosJson.optJSONObject(j) ?: continue
+                        val nombre = adjunto.optString("nombre", "").trim()
+                        val publicPath = adjunto.optString("public_path", "").trim()
+                        if (nombre.isNotEmpty() && publicPath.isNotEmpty()) {
+                            add(Adjunto(nombre = nombre, publicPath = publicPath))
                         }
                     }
                 }
-
-                out.add(
-                    Mensaje(
-                        materia = materia,
-                        titulo = titulo,
-                        cuerpoHtml = cuerpoHtml,
-                        fecha = fecha,
-                        autor = autor,
-                        isAnulado = isAnulado,
-                        adjuntos = adjuntos
-                    )
-                )
             }
 
-            return FetchResult(total = total, mensajes = out)
+            out.add(
+                Mensaje(
+                    materia = materia,
+                    titulo = titulo,
+                    cuerpoHtml = cuerpoHtml,
+                    fecha = fecha,
+                    autor = autor,
+                    isAnulado = isAnulado,
+                    adjuntos = adjuntos
+                )
+            )
         }
+
+        check(mensajesJson.length() == 0 || out.isNotEmpty()) {
+            "La respuesta contiene anuncios inválidos."
+        }
+
+        return FetchResult(
+            total = total,
+            mensajes = out,
+            receivedCount = mensajesJson.length()
+        )
     }
 
     private fun buildUrl(desde: Int, cantidad: Int, idMateria: Int?): String {

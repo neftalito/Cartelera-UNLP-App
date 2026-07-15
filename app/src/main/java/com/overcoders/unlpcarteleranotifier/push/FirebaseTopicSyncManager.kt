@@ -1,89 +1,127 @@
+/** Ejecuta y serializa la sincronización efectiva de tópicos Firebase. */
 package com.overcoders.unlpcarteleranotifier.push
 
 import android.content.Context
 import android.util.Log
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.messaging.FirebaseMessaging
+import com.overcoders.unlpcarteleranotifier.data.FirebaseTopicSyncStateStore
 import com.overcoders.unlpcarteleranotifier.data.SettingsStore
 import com.overcoders.unlpcarteleranotifier.data.SubscripcionesStore
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-/**
- * Mantiene sincronizadas las suscripciones reales de FCM con las preferencias del usuario.
- *
- * Mientras existan instalaciones que llegan desde versiones previas sin topics hidratados,
- * este sync también cumple el rol de migración automática desde las preferencias locales
- * viejas hacia el esquema nuevo de topics. Una vez que toda la base haya pasado por esta
- * versión, esta compatibilidad transitoria ya no debería ser necesaria.
- */
-object FirebaseTopicSyncManager {
+/** Mantiene las suscripciones reales de FCM alineadas con las preferencias del usuario. */
+internal object FirebaseTopicSyncManager {
     private const val TAG = "FirebaseTopicSync"
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val registrationMutex = Mutex()
+    private val coordinator = FirebaseTopicSyncCoordinator()
 
-    suspend fun register(context: Context) {
-        if (!FirebaseInitializer.ensureInitialized(context)) {
-            return
+    fun requestRegistration(context: Context) {
+        val applicationContext = context.applicationContext
+        applicationScope.launch { register(applicationContext) }
+    }
+
+    fun requestSync(
+        context: Context,
+        currentInstallationId: String? = null,
+    ) {
+        val applicationContext = context.applicationContext
+        applicationScope.launch {
+            sync(applicationContext, currentInstallationId)
         }
+    }
 
-        withContext(Dispatchers.IO) {
-            runCatching {
-                Tasks.await(FirebaseMessaging.getInstance().register())
-            }.onFailure { error ->
+    private suspend fun register(context: Context) {
+        if (!FirebaseInitializer.ensureInitialized(context)) return
+
+        registrationMutex.withLock {
+            try {
+                retryTransiently {
+                    withContext(Dispatchers.IO) {
+                        Tasks.await(FirebaseMessaging.getInstance().register())
+                    }
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
                 Log.w(TAG, "No se pudo registrar la instalación actual en Firebase.", error)
             }
         }
     }
 
-    suspend fun sync(
+    private suspend fun sync(
         context: Context,
         currentInstallationId: String? = null,
     ) {
-        if (!FirebaseInitializer.ensureInitialized(context)) {
-            return
-        }
+        if (!FirebaseInitializer.ensureInitialized(context)) return
 
-        val notifyAll = SettingsStore.notifyAllFlow(context).first()
-        val subscribedMateriaIds = SubscripcionesStore.subscripcionesFlow(context).first()
-        // Compatibilidad transitoria: las preferencias locales siguen siendo la fuente de verdad
-        // para rehidratar topics en instalaciones que se actualizaron desde versiones previas.
-        val desiredTopics = FirebaseTopics.desiredTopics(notifyAll, subscribedMateriaIds)
-
-        val lastSyncedTopics = SettingsStore.getLastSyncedFirebaseTopics(context)
-        val lastSyncedInstallationId = SettingsStore.getLastSyncedFirebaseInstallationId(context)
-        val normalizedInstallationId = currentInstallationId?.trim().orEmpty()
-        val registrationChanged = normalizedInstallationId.isNotBlank() &&
-            normalizedInstallationId != lastSyncedInstallationId
-
-        if (!registrationChanged && desiredTopics == lastSyncedTopics) {
-            return
-        }
-
-        val topicsToSubscribe = if (registrationChanged) {
-            // Si cambia la instalación registrada, rehidratamos todos los topics sobre el nuevo FID.
-            // Esto también cubre la migración temporal de instalaciones ya actualizadas.
-            desiredTopics
-        } else {
-            desiredTopics - lastSyncedTopics
-        }
-        val topicsToUnsubscribe = if (registrationChanged) {
-            emptySet()
-        } else {
-            lastSyncedTopics - desiredTopics
-        }
-
-        withContext(Dispatchers.IO) {
-            topicsToSubscribe.sorted().forEach { topic ->
-                Tasks.await(FirebaseMessaging.getInstance().subscribeToTopic(topic))
+        val messaging = FirebaseMessaging.getInstance()
+        val operations = object : FirebaseTopicSyncOperations {
+            override suspend fun desiredTopics(): Set<String> {
+                // Para una sincronización remota no usamos los fallbacks tolerantes de la UI:
+                // ante un error de lectura es más seguro reintentar que aplicar topics por defecto.
+                val notifyAll = SettingsStore.getNotifyAllForTopicSync(context)
+                val subscribedMateriaIds = SubscripcionesStore.getSubscriptionsForTopicSync(context)
+                return FirebaseTopics.desiredTopics(notifyAll, subscribedMateriaIds)
             }
-            topicsToUnsubscribe.sorted().forEach { topic ->
-                Tasks.await(FirebaseMessaging.getInstance().unsubscribeFromTopic(topic))
+
+            override suspend fun loadState(): FirebaseTopicSyncState =
+                FirebaseTopicSyncStateStore.load(context)
+
+            override suspend fun subscribe(topic: String) {
+                withContext(Dispatchers.IO) {
+                    Tasks.await(messaging.subscribeToTopic(topic))
+                }
+            }
+
+            override suspend fun unsubscribe(topic: String) {
+                withContext(Dispatchers.IO) {
+                    Tasks.await(messaging.unsubscribeFromTopic(topic))
+                }
+            }
+
+            override suspend fun saveState(state: FirebaseTopicSyncState) {
+                FirebaseTopicSyncStateStore.save(context, state)
             }
         }
 
-        SettingsStore.setLastSyncedFirebaseTopics(context, desiredTopics)
-        if (normalizedInstallationId.isNotBlank()) {
-            SettingsStore.setLastSyncedFirebaseInstallationId(context, normalizedInstallationId)
+        when (val result = coordinator.sync(currentInstallationId, operations)) {
+            is FirebaseTopicSyncResult.Failed -> {
+                Log.w(
+                    TAG,
+                    "No se pudieron sincronizar los topics de Firebase; se reintentará en el próximo disparador.",
+                    result.error
+                )
+            }
+
+            FirebaseTopicSyncResult.NoChanges,
+            FirebaseTopicSyncResult.Synced -> Unit
+        }
+    }
+
+    private suspend fun retryTransiently(block: suspend () -> Unit) {
+        val delays = listOf(500L, 1_500L)
+        var retryIndex = 0
+        while (true) {
+            try {
+                block()
+                return
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                if (retryIndex >= delays.size) throw error
+                delay(delays[retryIndex])
+                retryIndex += 1
+            }
         }
     }
 }

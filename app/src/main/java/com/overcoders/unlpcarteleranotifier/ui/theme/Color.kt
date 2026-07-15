@@ -1,3 +1,4 @@
+/** Declara la paleta base de colores del tema Compose. */
 package com.overcoders.unlpcarteleranotifier.ui.theme
 
 import androidx.compose.ui.graphics.Color
