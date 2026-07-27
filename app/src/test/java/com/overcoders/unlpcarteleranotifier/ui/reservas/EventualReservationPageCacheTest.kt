@@ -1,5 +1,5 @@
 /** Verifica la aplicación e invalidación de páginas de reservas eventuales. */
-package com.overcoders.unlpcarteleranotifier.ui
+package com.overcoders.unlpcarteleranotifier.ui.reservas
 
 import com.overcoders.unlpcarteleranotifier.data.CachedValue
 import com.overcoders.unlpcarteleranotifier.model.EventualReservationsPage

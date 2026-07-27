@@ -3,34 +3,7 @@
  */
 package com.overcoders.unlpcarteleranotifier.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -43,56 +16,38 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.overcoders.unlpcarteleranotifier.HeaderAction
-import com.overcoders.unlpcarteleranotifier.HeaderActionPlacement
 import com.overcoders.unlpcarteleranotifier.shouldInvalidatePendingNotification
 import com.overcoders.unlpcarteleranotifier.shouldRestoreNotificationResolution
-import com.overcoders.unlpcarteleranotifier.data.AnunciosCacheStore
-import com.overcoders.unlpcarteleranotifier.data.AnunciosSnapshot
-import com.overcoders.unlpcarteleranotifier.data.AnunciosService
 import com.overcoders.unlpcarteleranotifier.data.MateriasRepository
 import com.overcoders.unlpcarteleranotifier.data.SettingsStore
 import com.overcoders.unlpcarteleranotifier.model.CarteleraNotificationTarget
-import com.overcoders.unlpcarteleranotifier.model.MateriaCatalogItem
 import com.overcoders.unlpcarteleranotifier.model.Mensaje
 import com.overcoders.unlpcarteleranotifier.model.toMateriaCatalogIdOrNull
 import com.overcoders.unlpcarteleranotifier.push.NotificationOpenKind
-import com.overcoders.unlpcarteleranotifier.ui.cartelera.AnuncioCard
 import com.overcoders.unlpcarteleranotifier.ui.cartelera.AnuncioDetailScreen
-import com.overcoders.unlpcarteleranotifier.ui.cartelera.buildShareText
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.CarteleraTargetRefreshState
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.DEFAULT_NOTIFICATION_SEARCH_PAGE_LIMIT
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.MateriasScreenContent
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.MateriasScreenContentState
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.NotificationSearchDecision
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.anuncioSaveableKey
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.announcementDetailHeaderActions
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.announcementsRefreshHeaderActions
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.canResolveCarteleraTargetFromCurrentAnnouncements
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.findAnuncioForNotification
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.localSelectionRestoration
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.notificationSearchDecision
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.notificationTargetFilterId
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.rememberMateriasFeedState
 import com.overcoders.unlpcarteleranotifier.ui.cartelera.rememberMateriasFilterState
-import com.overcoders.unlpcarteleranotifier.ui.common.LoadingContentBox
-import com.overcoders.unlpcarteleranotifier.ui.common.PaginationLoadingIndicator
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.toLocalRestorationTarget
 import com.overcoders.unlpcarteleranotifier.ui.common.cachedContentWarning
-import com.overcoders.unlpcarteleranotifier.ui.common.paginatedLoadingState
-import com.overcoders.unlpcarteleranotifier.ui.common.copyPlainText
-import com.overcoders.unlpcarteleranotifier.ui.common.normalizeForSearch
-import com.overcoders.unlpcarteleranotifier.ui.common.partialContentWarning
-import com.overcoders.unlpcarteleranotifier.ui.common.sharePlainText
 import com.overcoders.unlpcarteleranotifier.ui.common.userFacingError
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-
-private data class AnnouncementRefreshBackup(
-    val filterKey: String,
-    val announcements: List<Mensaje>,
-    val totalAvailable: Int?,
-    val offset: Int,
-    val newCount: Int,
-    val newAnnouncementIdentities: Set<AnuncioIdentity>,
-    val loadedFilterKey: String?,
-    val hasPersistedSnapshot: Boolean,
-)
 
 /**
  * Pantalla principal de anuncios.
@@ -100,7 +55,6 @@ private data class AnnouncementRefreshBackup(
  * Combina feed global o filtrado por materia, paginación incremental y el detalle
  * del anuncio seleccionado, incluyendo acciones para compartir o copiar contenido.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MateriasScreen(
     initialTarget: CarteleraNotificationTarget? = null,
@@ -112,12 +66,14 @@ fun MateriasScreen(
     onHeaderActionsChange: (List<HeaderAction>) -> Unit = {}
 ) {
     val context = LocalContext.current
-    val focusManager = LocalFocusManager.current
-    val keyboardController = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val materiasFilterState = rememberMateriasFilterState()
-    val anunciosService = remember { AnunciosService() }
+    val initialFilterKey = materiasFilterState.selected?.id
+        ?.toMateriaCatalogIdOrNull()
+        ?.toString()
+        ?: "__all__"
+    val feedState = rememberMateriasFeedState(initialFilterKey)
     val materiasRepository = remember(context) { MateriasRepository.get(context) }
     val hideCancelledMessagesFlow = remember(context) {
         SettingsStore.hideCancelledMateriasMessagesFlow(context)
@@ -125,33 +81,18 @@ fun MateriasScreen(
     val hideCancelledMessages by hideCancelledMessagesFlow
         .collectAsStateWithLifecycle(initialValue = false)
 
-    val pageSize = 10
-
-    var loadingInitial by remember { mutableStateOf(true) }
-    var loadingMore by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var warning by remember { mutableStateOf<String?>(null) }
-
-    var offset by remember { mutableIntStateOf(0) }
-    val initialFilterKey = materiasFilterState.selected?.id?.toMateriaCatalogIdOrNull()?.toString()
-        ?: "__all__"
-    var paginationRestorationFilterKey by rememberSaveable {
-        mutableStateOf(initialFilterKey)
-    }
-    var paginationRestorationTargetOffset by rememberSaveable { mutableIntStateOf(0) }
-    var savedListIndex by rememberSaveable { mutableIntStateOf(0) }
-    var savedListScrollOffset by rememberSaveable { mutableIntStateOf(0) }
-    var listPositionRestorationPending by remember {
-        mutableStateOf(paginationRestorationTargetOffset > pageSize || savedListIndex > 0)
-    }
-    var totalAvailable by remember { mutableStateOf<Int?>(null) }
-    var anuncios by remember { mutableStateOf<List<Mensaje>>(emptyList()) }
-    var newCount by remember { mutableIntStateOf(0) }
-    var newAnnouncementIdentities by remember {
-        mutableStateOf<Set<AnuncioIdentity>>(emptySet())
-    }
-    var refreshBackup by remember { mutableStateOf<AnnouncementRefreshBackup?>(null) }
-    var lastSeenTotal by remember { mutableStateOf<Int?>(null) }
+    val pageSize = feedState.pageSize
+    val loadingInitial = feedState.loadingInitial
+    val loadingMore = feedState.loadingMore
+    val error = feedState.error
+    val warning = feedState.warning
+    val offset = feedState.offset
+    val paginationRestorationFilterKey = feedState.paginationRestorationFilterKey
+    val paginationRestorationTargetOffset = feedState.paginationRestorationTargetOffset
+    val listPositionRestorationPending = feedState.listPositionRestorationPending
+    val anuncios = feedState.anuncios
+    val loadedFilterKey = feedState.loadedFilterKey
+    val hasMore = feedState.hasMore
 
     var selected by remember { mutableStateOf<Mensaje?>(null) }
     var selectedAnnouncementKey by rememberSaveable { mutableStateOf<String?>(null) }
@@ -161,19 +102,14 @@ fun MateriasScreen(
     }
     var notificationOpenError by remember { mutableStateOf<String?>(null) }
     var notificationAutoPagesLoaded by remember { mutableIntStateOf(0) }
+    var notificationGlobalFallbackAttempted by rememberSaveable { mutableStateOf(false) }
     var notificationRefreshState by remember {
         mutableStateOf(CarteleraTargetRefreshState.REQUIRED)
     }
-    var loadedFilterKey by remember { mutableStateOf<String?>(null) }
-    var hasPersistedCurrentSnapshot by remember { mutableStateOf(false) }
-    var pageRequestGeneration by remember { mutableIntStateOf(0) }
     val materias by materiasRepository.items.collectAsStateWithLifecycle()
     var materiasError by remember { mutableStateOf<String?>(null) }
     var materiasWarning by remember { mutableStateOf<String?>(null) }
     var materiasLoading by remember { mutableStateOf(false) }
-
-    val seenKeys = remember { mutableSetOf<AnuncioIdentity>() }
-    fun keyOf(m: Mensaje): AnuncioIdentity = m.anuncioIdentity()
 
     fun openAnnouncement(
         anuncio: Mensaje,
@@ -197,351 +133,21 @@ fun MateriasScreen(
         pendingTarget = null
         notificationTargetForRestoration = null
         notificationAutoPagesLoaded = 0
+        notificationGlobalFallbackAttempted = false
         notificationRefreshState = CarteleraTargetRefreshState.REQUIRED
     }
 
-    val materiasFiltradas = remember(materias, materiasFilterState.query) {
-        val query = materiasFilterState.query.normalizeForSearch()
-        if (query.isBlank()) materias
-        else materias.filter { it.nombre.normalizeForSearch().contains(query) }
-    }
-
     suspend fun loadPage(reset: Boolean, forceRefresh: Boolean = false) {
-        if (!reset && (loadingInitial || loadingMore)) return
-
-        // Cada reinicio invalida respuestas anteriores para que un filtro viejo no reemplace
-        // el contenido correspondiente a la selección más reciente.
-        if (reset) {
-            pageRequestGeneration += 1
-            if (pendingTarget == null) {
-                notificationOpenError = null
-            }
-        }
-        val requestGeneration = pageRequestGeneration
-        error = null
-        warning = null
-        val materiaId = materiasFilterState.selected?.id?.toMateriaCatalogIdOrNull()
-        val filterKey = materiaId?.toString() ?: "__all__"
-        val existingSnapshotMatchesFilter = loadedFilterKey == filterKey
-        val preservesVisibleSnapshot = reset && forceRefresh && existingSnapshotMatchesFilter
-        if (reset) {
-            if (paginationRestorationFilterKey != filterKey) {
-                refreshBackup = null
-                paginationRestorationFilterKey = filterKey
-                paginationRestorationTargetOffset = 0
-                savedListIndex = 0
-                savedListScrollOffset = 0
-                listPositionRestorationPending = false
-            } else if (
-                !preservesVisibleSnapshot &&
-                (paginationRestorationTargetOffset > pageSize || savedListIndex > 0)
-            ) {
-                listPositionRestorationPending = true
-            }
-        }
-        if (
-            preservesVisibleSnapshot &&
-            paginationRestorationTargetOffset > pageSize &&
-            refreshBackup == null
-        ) {
-            refreshBackup = AnnouncementRefreshBackup(
-                filterKey = filterKey,
-                announcements = anuncios,
-                totalAvailable = totalAvailable,
-                offset = offset,
-                newCount = newCount,
-                newAnnouncementIdentities = newAnnouncementIdentities,
-                loadedFilterKey = loadedFilterKey,
-                hasPersistedSnapshot = hasPersistedCurrentSnapshot,
-            )
-        }
-        var loadedCachedSnapshot = false
-        fun isCurrentRequest(): Boolean {
-            val currentFilterKey =
-                materiasFilterState.selected?.id?.toMateriaCatalogIdOrNull()?.toString() ?: "__all__"
-            return requestGeneration == pageRequestGeneration && currentFilterKey == filterKey
-        }
-        try {
-            if (reset) {
-                if (!preservesVisibleSnapshot) {
-                    loadedFilterKey = null
-                    hasPersistedCurrentSnapshot = false
-                }
-                loadingInitial = true
-                loadingMore = false
-                if (!preservesVisibleSnapshot) {
-                    offset = 0
-                    newCount = 0
-                    newAnnouncementIdentities = emptySet()
-                }
-                if (!forceRefresh) {
-                    val cached = try {
-                        withContext(Dispatchers.IO) {
-                            AnunciosCacheStore.load(context, materiaId)
-                        }
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (_: Exception) {
-                        null
-                    }
-                    if (!isCurrentRequest()) return
-                    hasPersistedCurrentSnapshot = cached != null
-                    if (cached != null) {
-                        loadedCachedSnapshot = true
-                        val cachedMessages = cached.value.messages.distinctBy(::keyOf)
-                        anuncios = cachedMessages
-                        totalAvailable = cached.value.total
-                        offset = cached.value.nextOffset
-                        loadedFilterKey = filterKey
-                        seenKeys.clear()
-                        seenKeys.addAll(cachedMessages.map(::keyOf))
-                        if (
-                            paginationRestorationTargetOffset > pageSize &&
-                            refreshBackup == null
-                        ) {
-                            refreshBackup = AnnouncementRefreshBackup(
-                                filterKey = filterKey,
-                                announcements = cachedMessages,
-                                totalAvailable = cached.value.total,
-                                offset = cached.value.nextOffset,
-                                newCount = newCount,
-                                newAnnouncementIdentities = newAnnouncementIdentities,
-                                loadedFilterKey = filterKey,
-                                hasPersistedSnapshot = true,
-                            )
-                        }
-                    } else {
-                        anuncios = emptyList()
-                        totalAvailable = null
-                        seenKeys.clear()
-                    }
-                } else if (!preservesVisibleSnapshot) {
-                    // Un refresh forzado para otro filtro no debe dejar visible el snapshot
-                    // anterior si la nueva solicitud falla.
-                    anuncios = emptyList()
-                    totalAvailable = null
-                    seenKeys.clear()
-                }
-                if (materiasFilterState.selected == null) {
-                    lastSeenTotal = try {
-                        SettingsStore.getLastSeenTotal(context)
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (_: Exception) {
-                        null
-                    }
-                } else {
-                    newCount = 0
-                    newAnnouncementIdentities = emptySet()
-                }
-            } else {
-                loadingMore = true
-            }
-            val startOffset = if (reset) 0 else offset
-            val page = anunciosService.fetch(
-                desde = startOffset,
-                cantidad = pageSize,
-                idMateria = materiaId
-            )
-            if (!isCurrentRequest()) return
-
-            val pageMessages = page.mensajes.distinctBy(::keyOf)
-            val newOnes = pageMessages.filter { m ->
-                val k = keyOf(m)
-                if (seenKeys.contains(k)) {
-                    false
-                } else {
-                    seenKeys.add(k)
-                    true
-                }
-            }
-
-            anuncios = if (reset) pageMessages else anuncios + newOnes
-            totalAvailable = page.total
-            if (reset) {
-                if (preservesVisibleSnapshot) {
-                    listPositionRestorationPending =
-                        paginationRestorationTargetOffset > pageSize || savedListIndex > 0
-                }
-                seenKeys.clear()
-                seenKeys.addAll(pageMessages.map(::keyOf))
-            }
-            offset = startOffset + page.receivedCount
-            if (page.receivedCount == 0) {
-                totalAvailable = offset
-            }
-            paginationRestorationFilterKey = filterKey
-            paginationRestorationTargetOffset = maxOf(
-                paginationRestorationTargetOffset,
-                offset,
-            )
-            if (reset) {
-                loadedFilterKey = filterKey
-            }
-
-            val activeRefreshBackup = refreshBackup?.takeIf { it.filterKey == filterKey }
-            val refreshStillInProgress = activeRefreshBackup != null &&
-                offset < paginationRestorationTargetOffset &&
-                offset < (totalAvailable ?: Int.MAX_VALUE) &&
-                page.receivedCount > 0
-            val commitsGlobalRefresh = materiasFilterState.selected == null &&
-                (reset && activeRefreshBackup == null ||
-                    activeRefreshBackup != null && !refreshStillInProgress)
-            if (commitsGlobalRefresh) {
-                val storedTotal = lastSeenTotal ?: -1
-                val diff = if (storedTotal < 0) 0 else (page.total - storedTotal).coerceAtLeast(0)
-                newCount = if (storedTotal < 0) 0 else diff
-                if (newCount > 0) {
-                    android.widget.Toast.makeText(
-                        context,
-                        "Hay $newCount anuncios nuevos",
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
-                }
-                try {
-                    SettingsStore.setLastSeenTotal(context, page.total)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (_: Exception) {
-                    // El total sólo evita repetir el indicador de novedades; no invalida la página.
-                }
-                lastSeenTotal = page.total
-            }
-            if (materiasFilterState.selected == null) {
-                newAnnouncementIdentities = anuncios
-                    .take(newCount)
-                    .mapTo(mutableSetOf(), ::keyOf)
-            }
-
-            if (!refreshStillInProgress) {
-                try {
-                    withContext(Dispatchers.IO) {
-                        AnunciosCacheStore.save(
-                            context = context,
-                            snapshot = AnunciosSnapshot(
-                                total = page.total,
-                                messages = anuncios,
-                                nextOffset = offset,
-                            ),
-                            materiaId = materiaId,
-                        )
-                    }
-                    hasPersistedCurrentSnapshot = true
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (_: Exception) {
-                    // Los anuncios remotos siguen siendo válidos aunque no puedan persistirse.
-                }
-                refreshBackup = null
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            if (isCurrentRequest()) {
-                val activeRefreshBackup = refreshBackup?.takeIf { it.filterKey == filterKey }
-                val hasPersistedFallback = reset && (
-                    loadedCachedSnapshot ||
-                        (preservesVisibleSnapshot && hasPersistedCurrentSnapshot)
-                )
-                when {
-                    activeRefreshBackup != null -> {
-                        anuncios = activeRefreshBackup.announcements
-                        totalAvailable = activeRefreshBackup.totalAvailable
-                        offset = activeRefreshBackup.offset
-                        newCount = activeRefreshBackup.newCount
-                        newAnnouncementIdentities =
-                            activeRefreshBackup.newAnnouncementIdentities
-                        loadedFilterKey = activeRefreshBackup.loadedFilterKey
-                        hasPersistedCurrentSnapshot =
-                            activeRefreshBackup.hasPersistedSnapshot
-                        seenKeys.clear()
-                        seenKeys.addAll(anuncios.map(::keyOf))
-                        listPositionRestorationPending = false
-                        refreshBackup = null
-                        warning = cachedContentWarning(
-                            operation = "actualizar los anuncios",
-                            error = e,
-                        )
-                    }
-
-                    hasPersistedFallback -> {
-                        warning = cachedContentWarning(
-                            operation = "actualizar los anuncios",
-                            error = e,
-                        )
-                    }
-
-                    preservesVisibleSnapshot -> {
-                        warning = partialContentWarning(
-                            operation = "actualizar los anuncios del filtro seleccionado",
-                            error = e,
-                        )
-                    }
-
-                    else -> error = userFacingError(
-                        operation = "cargar los anuncios",
-                        error = e,
-                    )
-                }
-            }
-        } finally {
-            if (requestGeneration == pageRequestGeneration) {
-                loadingInitial = false
-                loadingMore = false
-            }
-        }
+        feedState.loadPage(
+            reset = reset,
+            forceRefresh = forceRefresh,
+            currentMateriaId = {
+                materiasFilterState.selected?.id?.toMateriaCatalogIdOrNull()
+            },
+            hasPendingNotification = pendingTarget != null,
+            onClearNotificationOpenError = { notificationOpenError = null },
+        )
     }
-
-    LaunchedEffect(loadingInitial, loadingMore, selected, pendingTarget) {
-        if (selected != null) {
-            val anuncio = selected ?: return@LaunchedEffect
-            val shareText = buildShareText(anuncio)
-            onHeaderActionsChange(
-                listOf(
-                    HeaderAction(
-                        icon = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Volver",
-                        placement = HeaderActionPlacement.Leading,
-                        onClick = ::closeSelectedAnnouncement
-                    ),
-                    HeaderAction(
-                        icon = Icons.Default.ContentCopy,
-                        contentDescription = "Copiar anuncio",
-                        onClick = {
-                            copyPlainText(
-                                context = context,
-                                label = "Anuncio",
-                                text = shareText
-                            )
-                        }
-                    ),
-                    HeaderAction(
-                        icon = Icons.Default.Share,
-                        contentDescription = "Compartir anuncio",
-                        onClick = {
-                            sharePlainText(
-                                context = context,
-                                text = shareText,
-                                chooserTitle = "Compartir anuncio"
-                            )
-                        }
-                    )
-                )
-            )
-        } else {
-            onHeaderActionsChange(
-                listOf(
-                    HeaderAction(
-                        icon = Icons.Default.Refresh,
-                        contentDescription = "Refrescar anuncios",
-                        enabled = pendingTarget == null && !loadingInitial && !loadingMore,
-                        onClick = { scope.launch { loadPage(reset = true, forceRefresh = true) } }
-                    )
-                )
-            )
-        }
-    }
-
     LaunchedEffect(selected) {
         onFullscreenDetailChange(selected != null)
         onTitleChange(if (selected != null) "Anuncio" else null)
@@ -566,6 +172,7 @@ fun MateriasScreen(
                     pendingTarget = null
                     notificationOpenError = null
                     notificationAutoPagesLoaded = 0
+                    notificationGlobalFallbackAttempted = false
                     notificationRefreshState = CarteleraTargetRefreshState.REQUIRED
                 }
             }
@@ -613,9 +220,9 @@ fun MateriasScreen(
             pendingTarget = initialTarget
             notificationTargetForRestoration = initialTarget
             notificationOpenError = null
-            error = null
-            warning = null
+            feedState.clearFeedback()
             notificationAutoPagesLoaded = 0
+            notificationGlobalFallbackAttempted = false
             notificationRefreshState = CarteleraTargetRefreshState.REQUIRED
             onInitialTargetConsumed()
         }
@@ -632,9 +239,9 @@ fun MateriasScreen(
         ) {
             pendingTarget = target
             notificationOpenError = null
-            error = null
-            warning = null
+            feedState.clearFeedback()
             notificationAutoPagesLoaded = 0
+            notificationGlobalFallbackAttempted = false
             notificationRefreshState = CarteleraTargetRefreshState.REQUIRED
         }
     }
@@ -664,29 +271,88 @@ fun MateriasScreen(
         }
     }
 
+    val headerRetriesNotification = pendingTarget != null && (error != null || warning != null)
+    val headerRefreshesCatalog = pendingTarget == null &&
+        error == null &&
+        notificationOpenError == null &&
+        (materiasError != null || (warning == null && materiasWarning != null))
+
+    LaunchedEffect(
+        loadingInitial,
+        loadingMore,
+        materiasLoading,
+        selected,
+        pendingTarget,
+        headerRetriesNotification,
+        headerRefreshesCatalog,
+    ) {
+        if (selected != null) {
+            val anuncio = selected ?: return@LaunchedEffect
+            onHeaderActionsChange(
+                announcementDetailHeaderActions(
+                    context = context,
+                    announcement = anuncio,
+                    onBack = ::closeSelectedAnnouncement,
+                )
+            )
+        } else {
+            val refreshEnabled = when {
+                pendingTarget != null -> headerRetriesNotification &&
+                    !loadingInitial &&
+                    !loadingMore
+                headerRefreshesCatalog -> !materiasLoading
+                else -> !loadingInitial && !loadingMore
+            }
+            onHeaderActionsChange(
+                announcementsRefreshHeaderActions(
+                    refreshesCatalog = headerRefreshesCatalog,
+                    enabled = refreshEnabled,
+                    onRefresh = {
+                        when {
+                            headerRetriesNotification -> scope.launch {
+                                feedState.clearFeedback()
+                                notificationAutoPagesLoaded = 0
+                                loadPage(reset = true, forceRefresh = true)
+                            }
+                            headerRefreshesCatalog -> scope.launch {
+                                loadMateriasCatalog(forceRefresh = true)
+                            }
+                            else -> scope.launch {
+                                loadPage(reset = true, forceRefresh = true)
+                            }
+                        }
+                    },
+                )
+            )
+        }
+    }
+
     LaunchedEffect(Unit) {
         loadMateriasCatalog()
     }
 
-    LaunchedEffect(pendingTarget?.materiaId, materias, materiasLoading) {
+    LaunchedEffect(
+        pendingTarget?.materiaId,
+        notificationGlobalFallbackAttempted,
+        materias,
+        materiasLoading,
+    ) {
         val target = pendingTarget ?: return@LaunchedEffect
         val materiaId = target.materiaId
-        if (materiaId == null) {
-            materiasFilterState.clearSelection()
-            return@LaunchedEffect
-        }
-        if (materiasLoading || materiasFilterState.selected?.id == materiaId) {
+        if (materiasLoading) {
             return@LaunchedEffect
         }
         val desiredMateriaId = notificationTargetFilterId(
             targetMateriaId = materiaId,
             availableMateriaIds = materias.mapTo(mutableSetOf()) { it.id },
+            useGlobalFallback = notificationGlobalFallbackAttempted,
         )
+        if (materiasFilterState.selected?.id == desiredMateriaId) return@LaunchedEffect
         val materia = materias.firstOrNull { it.id == desiredMateriaId }
         if (materia != null) {
             materiasFilterState.select(materia)
         } else {
-            // Si el catálogo no conoce el id, la única búsqueda posible es el feed global.
+            // El fallback y los ids desconocidos se resuelven únicamente en el feed global.
             materiasFilterState.clearSelection()
         }
     }
@@ -704,16 +370,11 @@ fun MateriasScreen(
         }
     }
 
-    val hasMore = totalAvailable?.let { offset < it } ?: true
-
     LaunchedEffect(listState, listPositionRestorationPending) {
         snapshotFlow {
             listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
         }.collect { (index, scrollOffset) ->
-            if (!listPositionRestorationPending) {
-                savedListIndex = index
-                savedListScrollOffset = scrollOffset
-            }
+            feedState.recordListPosition(index = index, scrollOffset = scrollOffset)
         }
     }
 
@@ -765,19 +426,19 @@ fun MateriasScreen(
             warning == null
         ) {
             if (!hasMore) {
-                paginationRestorationTargetOffset = offset
+                feedState.clampRestorationTargetToLoadedOffset()
             }
             val visibleItemCount = if (hideCancelledMessages) {
                 anuncios.count { !it.isAnulado }
             } else {
                 anuncios.size
             }
-            val maximumIndex = (visibleItemCount - 1).coerceAtLeast(0)
+            val restoredPosition = feedState.restoredListPosition(visibleItemCount)
             listState.scrollToItem(
-                index = savedListIndex.coerceIn(0, maximumIndex),
-                scrollOffset = savedListScrollOffset,
+                index = restoredPosition.index,
+                scrollOffset = restoredPosition.scrollOffset,
             )
-            listPositionRestorationPending = false
+            feedState.completeListPositionRestoration()
         }
     }
 
@@ -792,19 +453,25 @@ fun MateriasScreen(
         materiasFilterState.selected?.id,
         materias,
         notificationRefreshState,
+        notificationGlobalFallbackAttempted,
     ) {
         val target = pendingTarget ?: return@LaunchedEffect
         val isLoading = loadingInitial || loadingMore
 
         val targetMateriaId = target.materiaId
-        val selectedTargetFilter = targetMateriaId != null &&
+        val usingGlobalFallback = notificationGlobalFallbackAttempted && targetMateriaId != null
+        val selectedTargetFilter = !usingGlobalFallback && targetMateriaId != null &&
             materiasFilterState.selected?.id == targetMateriaId
         val targetMissingFromCatalog = targetMateriaId != null &&
             !materiasLoading &&
             materias.none { it.id == targetMateriaId }
-        val canSearchCurrentFilter = targetMateriaId == null ||
-            selectedTargetFilter ||
-            targetMissingFromCatalog
+        val canSearchCurrentFilter = when {
+            usingGlobalFallback -> materiasFilterState.selected == null
+            targetMateriaId == null -> true
+            selectedTargetFilter -> true
+            targetMissingFromCatalog -> true
+            else -> false
+        }
         if (!canSearchCurrentFilter) return@LaunchedEffect
 
         val expectedFilterKey = if (selectedTargetFilter) targetMateriaId else "__all__"
@@ -833,6 +500,7 @@ fun MateriasScreen(
                 pendingTarget = null
                 notificationOpenError = null
                 notificationAutoPagesLoaded = 0
+                notificationGlobalFallbackAttempted = false
                 notificationRefreshState = CarteleraTargetRefreshState.REQUIRED
                 return@LaunchedEffect
             }
@@ -857,6 +525,9 @@ fun MateriasScreen(
             notificationSearchDecision(
                 hasMore = hasMore,
                 automaticallyLoadedPages = notificationAutoPagesLoaded,
+                searchedWithMateriaFilter = selectedTargetFilter,
+                globalFallbackAttempted = notificationGlobalFallbackAttempted,
+                isLocalRestoration = target.localSelectionRestoration() != null,
                 maximumAutomaticPages = maxOf(
                     DEFAULT_NOTIFICATION_SEARCH_PAGE_LIMIT,
                     target.localSelectionRestoration()?.pageIndex ?: 0,
@@ -866,6 +537,16 @@ fun MateriasScreen(
             NotificationSearchDecision.LOAD_NEXT_PAGE -> {
                 notificationAutoPagesLoaded += 1
                 scope.launch { loadPage(reset = false) }
+            }
+
+            NotificationSearchDecision.RETRY_GLOBAL_FEED -> {
+                notificationGlobalFallbackAttempted = true
+                notificationAutoPagesLoaded = 0
+                // El cambio de filtro dispara el refresh global; marcarlo en progreso evita
+                // que el resolver programe en paralelo una segunda solicitud de reinicio.
+                notificationRefreshState = CarteleraTargetRefreshState.IN_PROGRESS
+                feedState.clearFeedback()
+                materiasFilterState.clearSelection()
             }
 
             NotificationSearchDecision.NOT_FOUND -> {
@@ -922,302 +603,40 @@ fun MateriasScreen(
         val notificationLoadFeedback = error ?: warning
         NotificationOpeningState(
             errorMessage = notificationLoadFeedback,
-            onRetry = if (notificationLoadFeedback != null) {
-                {
-                    error = null
-                    warning = null
-                    notificationAutoPagesLoaded = 0
-                    scope.launch { loadPage(reset = true, forceRefresh = true) }
-                }
-            } else {
-                null
-            },
-            onCancel = if (notificationLoadFeedback != null) {
-                { cancelPendingNotification() }
-            } else {
-                null
-            },
+            openingKey = notificationOpenEventId to pendingTarget,
+            onCancel = ::cancelPendingNotification,
         )
         return
     }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        ExposedDropdownMenuBox(
-            expanded = materiasFilterState.expanded,
-            onExpandedChange = { isExpanded ->
-                if (isExpanded) {
-                    materiasFilterState.beginEditing()
-                } else {
-                    materiasFilterState.dismissEditing()
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            OutlinedTextField(
-                value = materiasFilterState.query,
-                onValueChange = { materiasFilterState.query = it },
-                label = { Text("Filtrar por materia") },
-                placeholder = { Text("Buscar materia...") },
-                trailingIcon = {
-                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = materiasFilterState.expanded)
-                },
-                modifier = Modifier
-                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable, enabled = true)
-                    .fillMaxWidth()
+    MateriasScreenContent(
+        state = MateriasScreenContentState(
+            materias = materias,
+            materiasLoading = materiasLoading,
+            materiasError = materiasError,
+            materiasWarning = materiasWarning,
+            announcementsForDisplay = feedState.announcementsForDisplay,
+            newAnnouncementIdentities = feedState.announcementIdentitiesForDisplay,
+            hideCancelledMessages = hideCancelledMessages,
+            loadingInitial = loadingInitial,
+            loadingMore = loadingMore,
+            error = error,
+            notificationOpenError = notificationOpenError,
+            warning = warning,
+            loadedFilterKey = loadedFilterKey,
+            hasMore = hasMore,
+        ),
+        filterState = materiasFilterState,
+        listState = listState,
+        onAnnouncementClick = { announcement, absoluteIndex ->
+            openAnnouncement(
+                anuncio = announcement,
+                restorationTarget = announcement.toLocalRestorationTarget(
+                    materiaId = materiasFilterState.selected?.id,
+                    pageIndex = absoluteIndex / pageSize,
+                ),
             )
-
-            ExposedDropdownMenu(
-                expanded = materiasFilterState.expanded,
-                onDismissRequest = { materiasFilterState.dismissEditing() }
-            ) {
-                if (materiasLoading && materias.isEmpty()) {
-                    DropdownMenuItem(
-                        text = { Text("Cargando materias…") },
-                        onClick = { materiasFilterState.expanded = false },
-                        enabled = false
-                    )
-                } else if (materiasError != null && materias.isEmpty()) {
-                    DropdownMenuItem(
-                        text = { Text("Catálogo no disponible") },
-                        onClick = { materiasFilterState.expanded = false },
-                        enabled = false,
-                    )
-                } else if (materiasFiltradas.isEmpty()) {
-                    DropdownMenuItem(
-                        text = { Text("Sin resultados") },
-                        onClick = { materiasFilterState.expanded = false },
-                        enabled = false
-                    )
-                } else {
-                    Column(
-                        modifier = Modifier
-                            .heightIn(max = 320.dp)
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        materiasFiltradas.forEach { materia ->
-                            DropdownMenuItem(
-                                text = { Text(materia.nombre) },
-                                onClick = {
-                                    materiasFilterState.select(materia)
-                                    focusManager.clearFocus(force = true)
-                                    keyboardController?.hide()
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        if (materiasFilterState.selected != null) {
-            Spacer(Modifier.height(8.dp))
-            TextButton(onClick = {
-                materiasFilterState.clearSelection()
-            }) {
-                Text("Quitar filtro")
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        val visibleFeedback = error
-            ?: notificationOpenError
-            ?: materiasError
-            ?: warning
-            ?: materiasWarning
-        val visibleFeedbackIsWarning = error == null &&
-            notificationOpenError == null &&
-            materiasError == null &&
-            visibleFeedback != null
-        if (visibleFeedback != null) {
-            Text(
-                visibleFeedback,
-                color = if (visibleFeedbackIsWarning) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    MaterialTheme.colorScheme.error
-                },
-                style = MaterialTheme.typography.bodySmall
-            )
-            when {
-                error != null -> TextButton(
-                    onClick = {
-                        scope.launch { loadPage(reset = true, forceRefresh = true) }
-                    },
-                    enabled = !loadingInitial && !loadingMore,
-                ) {
-                    Text("Reintentar")
-                }
-
-                notificationOpenError == null &&
-                    materiasError != null -> TextButton(
-                    onClick = { scope.launch { loadMateriasCatalog(forceRefresh = true) } },
-                    enabled = !materiasLoading,
-                ) {
-                    Text("Reintentar")
-                }
-
-                notificationOpenError == null &&
-                    materiasError == null &&
-                    warning != null -> TextButton(
-                    onClick = {
-                        scope.launch { loadPage(reset = true, forceRefresh = true) }
-                    },
-                    enabled = !loadingInitial && !loadingMore,
-                ) {
-                    Text("Reintentar")
-                }
-
-                notificationOpenError == null &&
-                    materiasError == null &&
-                    warning == null &&
-                    materiasWarning != null -> TextButton(
-                    onClick = { scope.launch { loadMateriasCatalog(forceRefresh = true) } },
-                    enabled = !materiasLoading,
-                ) {
-                    Text("Reintentar")
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-        }
-
-        val announcementsForDisplay = refreshBackup?.announcements ?: anuncios
-        val identitiesForDisplay = refreshBackup?.newAnnouncementIdentities
-            ?: newAnnouncementIdentities
-        val anunciosVisibles = remember(announcementsForDisplay, hideCancelledMessages) {
-            if (hideCancelledMessages) {
-                announcementsForDisplay.filterNot { it.isAnulado }
-            } else {
-                announcementsForDisplay
-            }
-        }
-        val currentFilterKey = materiasFilterState.selected?.id?.toMateriaCatalogIdOrNull()?.toString()
-            ?: "__all__"
-        val hasLoadedCurrentFilter = loadedFilterKey == currentFilterKey
-        val loadingState = paginatedLoadingState(
-            isContentLoading = loadingInitial,
-            isLoadingMore = loadingMore,
-            resolvedKey = loadedFilterKey,
-            requestedKey = currentFilterKey,
-            hasError = error != null,
-        )
-        val emptyStateMessage = when {
-            !hasLoadedCurrentFilter ||
-                loadingMore ||
-                hasMore ||
-                error != null -> null
-            anunciosVisibles.isNotEmpty() -> null
-            announcementsForDisplay.isNotEmpty() && hideCancelledMessages ->
-                "No hay anuncios visibles con la configuración actual."
-            materiasFilterState.selected != null ->
-                "No hay anuncios disponibles para la materia seleccionada."
-            else -> "No hay anuncios disponibles."
-        }
-        val canLoadMore = hasMore &&
-            hasLoadedCurrentFilter &&
-            !loadingInitial &&
-            error == null &&
-            warning == null
-
-        LoadingContentBox(
-            phase = loadingState.phase,
-            initialText = "Cargando anuncios…",
-            refreshContentDescription = "Actualizando anuncios",
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                if (emptyStateMessage != null) {
-                    item(key = "empty") {
-                        Text(
-                            text = emptyStateMessage,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 48.dp),
-                        )
-                    }
-                }
-
-                items(anunciosVisibles, key = Mensaje::anuncioSaveableKey) { a ->
-                    AnuncioCard(
-                        anuncio = a,
-                        isNew = materiasFilterState.selected == null &&
-                                keyOf(a) in identitiesForDisplay,
-                        onClick = {
-                            val absoluteIndex = announcementsForDisplay.indexOfFirst {
-                                it.anuncioSaveableKey() == a.anuncioSaveableKey()
-                            }.coerceAtLeast(0)
-                            openAnnouncement(
-                                anuncio = a,
-                                restorationTarget = a.toLocalRestorationTarget(
-                                    materiaId = materiasFilterState.selected?.id,
-                                    pageIndex = absoluteIndex / pageSize,
-                                ),
-                            )
-                        }
-                    )
-                }
-
-                if (loadingMore || canLoadMore) {
-                    item(key = "pagination") {
-                        Spacer(Modifier.height(8.dp))
-
-                        if (loadingState.showPaginationIndicator) {
-                            PaginationLoadingIndicator(text = "Cargando más anuncios…")
-                        } else {
-                            Button(
-                                onClick = { scope.launch { loadPage(reset = false) } },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !loadingInitial && !loadingMore
-                            ) {
-                                Text("Cargar más")
-                            }
-                            Spacer(Modifier.height(8.dp))
-                        }
-                    }
-                }
-            }
-
-            ScrollMoreHint(
-                listState = listState,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 8.dp),
-            )
-        }
-    }
+        },
+        onLoadMore = { scope.launch { loadPage(reset = false) } },
+    )
 }
-
-internal fun notificationTargetFilterId(
-    targetMateriaId: String?,
-    availableMateriaIds: Set<String>,
-): String? = targetMateriaId?.takeIf(availableMateriaIds::contains)
-
-internal enum class NotificationSearchDecision {
-    LOAD_NEXT_PAGE,
-    NOT_FOUND,
-    SEARCH_LIMIT_REACHED,
-}
-
-internal fun notificationSearchDecision(
-    hasMore: Boolean,
-    automaticallyLoadedPages: Int,
-    maximumAutomaticPages: Int = DEFAULT_NOTIFICATION_SEARCH_PAGE_LIMIT,
-): NotificationSearchDecision = when {
-    !hasMore -> NotificationSearchDecision.NOT_FOUND
-    automaticallyLoadedPages >= maximumAutomaticPages ->
-        NotificationSearchDecision.SEARCH_LIMIT_REACHED
-    else -> NotificationSearchDecision.LOAD_NEXT_PAGE
-}
-
-internal const val DEFAULT_NOTIFICATION_SEARCH_PAGE_LIMIT = 5

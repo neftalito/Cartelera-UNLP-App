@@ -5,6 +5,7 @@ package com.overcoders.unlpcarteleranotifier.ui
 
 import com.overcoders.unlpcarteleranotifier.model.HorarioMateria
 import com.overcoders.unlpcarteleranotifier.model.HorarioPeriodo
+import com.overcoders.unlpcarteleranotifier.ui.horarios.withCurrentMateriaName
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

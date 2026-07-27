@@ -213,6 +213,11 @@ private fun buildHtmlDocument(
                 color: ${onSurfaceColor.toCssHex()};
             }
 
+            .content td span,
+            .content th span {
+                color: inherit !important;
+            }
+
             .content a {
                 color: ${primaryColor.toCssHex()};
             }

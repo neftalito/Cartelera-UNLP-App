@@ -15,6 +15,7 @@ object FirebaseClientConfig {
     val apiKey: String = BuildConfig.FIREBASE_API_KEY.trim()
     val gcmSenderId: String = BuildConfig.FIREBASE_GCM_SENDER_ID.trim()
 
+    @Suppress("SameReturnValue")
     fun isConfigured(): Boolean = BuildConfig.FIREBASE_CONFIGURATION_VALID
 
     fun buildOptions(): FirebaseOptions {

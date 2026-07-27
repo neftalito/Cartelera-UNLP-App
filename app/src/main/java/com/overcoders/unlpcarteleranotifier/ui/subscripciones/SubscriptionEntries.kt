@@ -1,5 +1,5 @@
 /** Combina el catálogo y los IDs guardados para presentar suscripciones coherentes. */
-package com.overcoders.unlpcarteleranotifier.ui
+package com.overcoders.unlpcarteleranotifier.ui.subscripciones
 
 import com.overcoders.unlpcarteleranotifier.model.MateriaCatalogItem
 import java.util.Locale
@@ -29,19 +29,19 @@ internal fun buildSubscriptionEntries(
             materia != null -> SubscriptionEntry(
                 id = materia.id,
                 nombre = materia.nombre,
-                status = SubscriptionStatus.VALID
+                status = SubscriptionStatus.VALID,
             )
 
             catalogAvailable -> SubscriptionEntry(
                 id = id,
                 nombre = "Suscripción inválida (materia no encontrada)",
-                status = SubscriptionStatus.INVALID
+                status = SubscriptionStatus.INVALID,
             )
 
             else -> SubscriptionEntry(
                 id = id,
                 nombre = "Suscripción guardada",
-                status = SubscriptionStatus.UNVERIFIED
+                status = SubscriptionStatus.UNVERIFIED,
             )
         }
     }.sortedWith(

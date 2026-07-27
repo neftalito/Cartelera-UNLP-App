@@ -1,5 +1,5 @@
 /** Verifica la presentación de suscripciones conocidas y obsoletas. */
-package com.overcoders.unlpcarteleranotifier.ui
+package com.overcoders.unlpcarteleranotifier.ui.subscripciones
 
 import com.overcoders.unlpcarteleranotifier.model.MateriaCatalogItem
 import org.junit.Assert.assertEquals
@@ -10,7 +10,7 @@ class SubscriptionEntriesTest {
     fun doesNotMarkSubscriptionsInvalidWithoutACatalog() {
         val result = buildSubscriptionEntries(
             materias = emptyList(),
-            subscriptionIds = setOf("42")
+            subscriptionIds = setOf("42"),
         )
 
         assertEquals(SubscriptionStatus.UNVERIFIED, result.single().status)
@@ -20,7 +20,7 @@ class SubscriptionEntriesTest {
     fun distinguishesKnownAndMissingSubscriptionsWhenCatalogIsAvailable() {
         val result = buildSubscriptionEntries(
             materias = listOf(MateriaCatalogItem(id = "1", nombre = "Algoritmos")),
-            subscriptionIds = setOf("1", "2")
+            subscriptionIds = setOf("1", "2"),
         )
 
         assertEquals(SubscriptionStatus.VALID, result.first { it.id == "1" }.status)

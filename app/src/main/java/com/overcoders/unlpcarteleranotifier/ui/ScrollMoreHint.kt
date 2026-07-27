@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 fun ScrollMoreHint(
@@ -93,7 +94,7 @@ private fun DelayedScrollMoreHint(
 
     LaunchedEffect(shouldShowHint, showDelayMillis) {
         if (shouldShowHint) {
-            delay(showDelayMillis)
+            delay(showDelayMillis.milliseconds)
             stableVisible = true
         } else {
             stableVisible = false

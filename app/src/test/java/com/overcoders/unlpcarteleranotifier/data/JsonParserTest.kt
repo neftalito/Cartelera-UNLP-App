@@ -238,6 +238,41 @@ class JsonParserTest {
     }
 
     @Test
+    fun parsesEmptyEventualReservationsResultReportedAsPageZero() {
+        val result = EventualReservationsService().parsePage(
+            body = """
+                {
+                  "rowconfig": [],
+                  "data": [],
+                  "paginator-data": {
+                    "last": 0,
+                    "current": 0,
+                    "numItemsPerPage": 10,
+                    "first": 1,
+                    "pageCount": 0,
+                    "totalCount": 0,
+                    "pageRange": 0,
+                    "startPage": 1,
+                    "endPage": 0,
+                    "pagesInRange": [1, 0],
+                    "firstPageInRange": 0,
+                    "lastPageInRange": 1,
+                    "currentItemCount": 0,
+                    "firstItemNumber": -9,
+                    "lastItemNumber": -10
+                  }
+                }
+            """.trimIndent(),
+            expectedPage = 1
+        )
+
+        assertTrue(result.reservations.isEmpty())
+        assertEquals(1, result.currentPage)
+        assertNull(result.nextPage)
+        assertEquals(0, result.totalCount)
+    }
+
+    @Test
     fun rejectsEventualReservationsPayloadWhenEveryRowIsInvalid() {
         assertThrows(IllegalStateException::class.java) {
             EventualReservationsService().parsePage(

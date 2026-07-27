@@ -112,20 +112,30 @@ class EventualReservationsService(client: OkHttpClient? = null) {
             "La respuesta contiene reservas inválidas."
         }
 
-        val currentPage = paginator.optInt("current", 0)
-        check(currentPage > 0) { "La respuesta contiene una página actual inválida." }
+        val responseCurrentPage = paginator.optInt("current", 0)
+        val pageCount = paginator.optInt("pageCount", responseCurrentPage).coerceAtLeast(0)
+        val totalCount = paginator.optInt("totalCount", reservations.size).coerceAtLeast(0)
+        val isEmptyResult =
+            data.length() == 0 &&
+                paginator.has("current") && responseCurrentPage == 0 &&
+                paginator.has("pageCount") && pageCount == 0 &&
+                paginator.has("totalCount") && totalCount == 0
+        check(responseCurrentPage > 0 || isEmptyResult) {
+            "La respuesta contiene una página actual inválida."
+        }
+        // El backend informa current = 0 cuando el filtro no produce ninguna página.
+        val currentPage = responseCurrentPage.takeIf { it > 0 } ?: expectedPage ?: 1
         check(expectedPage == null || currentPage == expectedPage) {
             "La respuesta corresponde a la página $currentPage, no a la $expectedPage."
         }
-        val pageCount = paginator.optInt("pageCount", currentPage).coerceAtLeast(0)
         val nextPage = paginator.optInt("next", 0)
-            .takeIf { it > currentPage && it <= pageCount }
+            .takeIf { it in (currentPage + 1)..pageCount }
 
         return EventualReservationsPage(
             reservations = reservations,
             currentPage = currentPage,
             nextPage = nextPage,
-            totalCount = paginator.optInt("totalCount", reservations.size).coerceAtLeast(0)
+            totalCount = totalCount
         )
     }
 

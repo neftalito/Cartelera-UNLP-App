@@ -5,6 +5,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.time.Duration.Companion.milliseconds
 
 internal data class FirebaseTopicSyncState(
     val topics: Set<String> = emptySet(),
@@ -93,7 +94,7 @@ internal class FirebaseTopicSyncCoordinator(
                 throw error
             } catch (error: Exception) {
                 if (retryIndex >= retryDelaysMillis.size) throw error
-                delay(retryDelaysMillis[retryIndex])
+                delay(retryDelaysMillis[retryIndex].milliseconds)
                 retryIndex += 1
             }
         }

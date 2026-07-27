@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.milliseconds
 
 /** Mantiene las suscripciones reales de FCM alineadas con las preferencias del usuario. */
 internal object FirebaseTopicSyncManager {
@@ -119,7 +120,7 @@ internal object FirebaseTopicSyncManager {
                 throw error
             } catch (error: Exception) {
                 if (retryIndex >= delays.size) throw error
-                delay(delays[retryIndex])
+                delay(delays[retryIndex].milliseconds)
                 retryIndex += 1
             }
         }

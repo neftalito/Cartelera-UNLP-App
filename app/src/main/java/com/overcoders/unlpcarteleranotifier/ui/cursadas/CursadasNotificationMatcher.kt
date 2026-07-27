@@ -1,7 +1,7 @@
 /**
  * Resuelve una notificación de cursada contra el snapshot remoto vigente.
  */
-package com.overcoders.unlpcarteleranotifier.ui
+package com.overcoders.unlpcarteleranotifier.ui.cursadas
 
 import com.overcoders.unlpcarteleranotifier.model.CursadaInfo
 import com.overcoders.unlpcarteleranotifier.model.CursadaNotificationTarget
@@ -44,6 +44,12 @@ internal fun isCursadaVersionAtLeast(
     val targetEpoch = parseCursadaDate(normalizedTargetDate) ?: return false
     return currentEpoch >= targetEpoch
 }
+
+internal fun isCursadaTargetResolutionConfirmed(
+    targetRequestId: Long,
+    confirmedTargetRequestId: Long?,
+    loading: Boolean,
+): Boolean = !loading && confirmedTargetRequestId == targetRequestId
 
 private fun parseCursadaDate(value: String): Long? {
     val normalized = value.trim()

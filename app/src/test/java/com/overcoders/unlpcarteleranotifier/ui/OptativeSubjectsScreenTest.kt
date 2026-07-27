@@ -1,6 +1,8 @@
 /** Verifica decisiones de carga y estado de materias optativas. */
 package com.overcoders.unlpcarteleranotifier.ui
 
+import com.overcoders.unlpcarteleranotifier.ui.herramientas.FIRST_OPTATIVAS_YEAR
+import com.overcoders.unlpcarteleranotifier.ui.herramientas.optativeYears
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

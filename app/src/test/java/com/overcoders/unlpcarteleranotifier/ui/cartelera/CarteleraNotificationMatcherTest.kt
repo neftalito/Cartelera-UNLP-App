@@ -1,7 +1,7 @@
 /**
  * Verifica matching, paginación y restauración de destinos de cartelera.
  */
-package com.overcoders.unlpcarteleranotifier.ui
+package com.overcoders.unlpcarteleranotifier.ui.cartelera
 
 import com.overcoders.unlpcarteleranotifier.model.CarteleraNotificationTarget
 import com.overcoders.unlpcarteleranotifier.model.Mensaje
@@ -63,7 +63,7 @@ class CarteleraNotificationMatcherTest {
 
     @Test
     fun waitsForRefreshBeforeOpeningCachedAnnouncementWithStableIdentity() {
-        val cancellationTarget = targetForMessage(isAnulado = true)
+        val cancellationTarget = cancellationTargetForMessage()
 
         // Una anulación mantiene la identidad del anuncio, por lo que el cache viejo coincide.
         assertEquals(message, findAnuncioForNotification(listOf(message), cancellationTarget))
@@ -149,6 +149,83 @@ class CarteleraNotificationMatcherTest {
     }
 
     @Test
+    fun retriesGloballyWhenFilteredFeedIsExhausted() {
+        assertEquals(
+            NotificationSearchDecision.RETRY_GLOBAL_FEED,
+            notificationSearchDecision(
+                hasMore = false,
+                automaticallyLoadedPages = 0,
+                searchedWithMateriaFilter = true,
+                globalFallbackAttempted = false,
+            )
+        )
+    }
+
+    @Test
+    fun retriesGloballyWhenFilteredSearchReachesAutomaticLimit() {
+        assertEquals(
+            NotificationSearchDecision.RETRY_GLOBAL_FEED,
+            notificationSearchDecision(
+                hasMore = true,
+                automaticallyLoadedPages = 5,
+                searchedWithMateriaFilter = true,
+                globalFallbackAttempted = false,
+                maximumAutomaticPages = 5,
+            )
+        )
+    }
+
+    @Test
+    fun doesNotRetryGloballyAfterFallbackWasAlreadyAttempted() {
+        assertEquals(
+            NotificationSearchDecision.NOT_FOUND,
+            notificationSearchDecision(
+                hasMore = false,
+                automaticallyLoadedPages = 0,
+                searchedWithMateriaFilter = true,
+                globalFallbackAttempted = true,
+            )
+        )
+        assertEquals(
+            NotificationSearchDecision.SEARCH_LIMIT_REACHED,
+            notificationSearchDecision(
+                hasMore = true,
+                automaticallyLoadedPages = 5,
+                searchedWithMateriaFilter = true,
+                globalFallbackAttempted = true,
+                maximumAutomaticPages = 5,
+            )
+        )
+    }
+
+    @Test
+    fun doesNotUseGlobalFallbackForUnfilteredSearch() {
+        assertEquals(
+            NotificationSearchDecision.NOT_FOUND,
+            notificationSearchDecision(
+                hasMore = false,
+                automaticallyLoadedPages = 0,
+                searchedWithMateriaFilter = false,
+                globalFallbackAttempted = false,
+            )
+        )
+    }
+
+    @Test
+    fun doesNotUseGlobalFallbackForLocalSelectionRestoration() {
+        assertEquals(
+            NotificationSearchDecision.NOT_FOUND,
+            notificationSearchDecision(
+                hasMore = false,
+                automaticallyLoadedPages = 0,
+                searchedWithMateriaFilter = true,
+                globalFallbackAttempted = false,
+                isLocalRestoration = true,
+            )
+        )
+    }
+
+    @Test
     fun usesGlobalFeedWhenTargetHasNoKnownMateriaId() {
         assertNull(
             notificationTargetFilterId(
@@ -169,15 +246,22 @@ class CarteleraNotificationMatcherTest {
                 availableMateriaIds = setOf("1"),
             )
         )
+        assertNull(
+            notificationTargetFilterId(
+                targetMateriaId = "1",
+                availableMateriaIds = setOf("1"),
+                useGlobalFallback = true,
+            )
+        )
     }
 
-    private fun targetForMessage(isAnulado: Boolean) = CarteleraNotificationTarget(
+    private fun cancellationTargetForMessage() = CarteleraNotificationTarget(
         materiaId = "1",
         materia = message.materia,
         titulo = message.titulo,
         fecha = message.fecha,
         autor = message.autor,
         resumen = "La publicación cambió",
-        isAnulado = isAnulado,
+        isAnulado = true,
     )
 }

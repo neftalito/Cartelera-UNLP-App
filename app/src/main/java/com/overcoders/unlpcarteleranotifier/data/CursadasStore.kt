@@ -52,20 +52,6 @@ object CursadasStore {
         return prefs.contains(CURSADAS_JSON_KEY) && prefs.contains(SAVED_AT_KEY)
     }
 
-    suspend fun loadLastSeenEpochByMateria(context: Context): Map<String, Long> {
-        val prefs = context.cursadasDataStore.data.first()
-        val json = prefs[LAST_SEEN_BY_MATERIA_KEY].orEmpty()
-        if (json.isBlank()) return emptyMap()
-        return try {
-            decodeLastSeen(json)
-        } catch (_: Exception) {
-            context.cursadasDataStore.edit { stored ->
-                stored.remove(LAST_SEEN_BY_MATERIA_KEY)
-            }
-            emptyMap()
-        }
-    }
-
     suspend fun ensureSeenBaseline(context: Context, cursadas: List<CursadaInfo>): Map<String, Long> {
         var result = emptyMap<String, Long>()
         context.cursadasDataStore.edit { prefs ->

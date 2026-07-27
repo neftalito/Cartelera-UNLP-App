@@ -9,9 +9,9 @@ import kotlinx.coroutines.CancellationException
 
 internal const val GENERIC_ERROR_MESSAGE = "Ocurrió un error. Intentá nuevamente."
 internal const val CACHED_CONTENT_WARNING =
-    "No se pudo actualizar la información. Se muestra la versión guardada."
+    "No se pudo actualizar la información. Se muestra la versión cacheada."
 internal const val PARTIAL_CONTENT_WARNING =
-    "No se pudo actualizar toda la información. Se muestran los datos disponibles."
+    "No se pudo actualizar toda la información. Se muestran los datos cacheados."
 
 internal fun userFacingError(
     operation: String,

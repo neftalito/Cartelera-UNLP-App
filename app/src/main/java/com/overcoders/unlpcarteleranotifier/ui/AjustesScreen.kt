@@ -50,6 +50,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 fun AjustesScreen(
@@ -146,7 +147,7 @@ fun AjustesScreen(
             try {
                 scrollState.animateScrollTo(0)
                 showNotifyAllHighlight = true
-                delay(2500)
+                delay(2500.milliseconds)
             } finally {
                 showNotifyAllHighlight = false
                 onHighlightNotifyAllConsumed()

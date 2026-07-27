@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -80,6 +81,7 @@ internal fun LoadingContentBox(
 internal fun CenteredLoadingState(
     text: String,
     modifier: Modifier = Modifier,
+    trailingContent: @Composable ColumnScope.() -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -98,6 +100,7 @@ internal fun CenteredLoadingState(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
+        trailingContent()
     }
 }
 

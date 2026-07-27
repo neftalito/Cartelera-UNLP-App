@@ -94,7 +94,7 @@ para todas las materias o aquellas a las que el usuario está suscrito.
 - `navigation/` concentra la shell de navegación principal, tabs, pager, dialogs globales y encabezado compartido.
 - `data/` concentra clientes HTTP, parsing de JSON/HTML, repositorios y persistencia liviana para cartelera, cursadas y herramientas.
 - `push/` inicializa Firebase, sincroniza tópicos, recibe data messages, mantiene el canal y arma notificaciones locales.
-- `ui/` contiene las pantallas Compose, componentes visuales y helpers de presentación, separados por feature y herramientas.
+- `ui/` mantiene las pantallas Compose de entrada y delega estado, contenido y acciones de encabezado en paquetes por feature, según la complejidad de cada flujo.
 - `model/` define las estructuras compartidas entre red, persistencia y UI.
 
 ## Flujo de sincronización
@@ -117,10 +117,14 @@ para todas las materias o aquellas a las que el usuario está suscrito.
 │   │   │   ├── push/
 │   │   │   ├── ui/
 │   │   │   │   ├── ajustes/
+│   │   │   │   ├── aulas/
 │   │   │   │   ├── cartelera/
 │   │   │   │   ├── common/
 │   │   │   │   ├── cursadas/
+│   │   │   │   ├── herramientas/
 │   │   │   │   ├── horarios/
+│   │   │   │   ├── reservas/
+│   │   │   │   ├── subscripciones/
 │   │   │   │   └── theme/
 │   │   ├── res/
 │   │   └── AndroidManifest.xml
@@ -140,8 +144,8 @@ para todas las materias o aquellas a las que el usuario está suscrito.
 - `data/`: servicios HTTP, repositorios, parsing de JSON/HTML, DataStore y cachés persistentes o temporales para el contenido remoto.
 - `model/`: modelos de datos compartidos entre red, persistencia, push y UI.
 - `push/`: integración con Firebase Cloud Messaging, sincronización de tópicos y recepción de notificaciones.
-- `ui/`: pantallas de Jetpack Compose y lógica de presentación.
-- `ui/cartelera`, `ui/cursadas`, `ui/horarios` y `ui/ajustes`: componentes y detalles extraídos por feature para evitar pantallas monolíticas.
+- `ui/`: pantallas de entrada de Jetpack Compose y coordinación de los efectos propios de cada vista.
+- `ui/ajustes`, `ui/aulas`, `ui/cartelera`, `ui/cursadas`, `ui/herramientas`, `ui/horarios`, `ui/reservas` y `ui/subscripciones`: estado, contenido, acciones y componentes organizados por feature para evitar pantallas monolíticas.
 - `ui/common/`: bloques compartidos como renderizado HTML/WebView y acciones reutilizables de copiar/compartir.
 - `ui/theme/`: tema, colores y tipografías de la aplicación.
 - `res/`: recursos Android como colores, textos, iconos, temas y archivos XML de configuración.
@@ -267,8 +271,16 @@ En Windows también podés usar:
 
 ## Contribuidores
 
-Las contribuciones son bienvenidas. Si querés proponer cambios, podés abrir un
-issue, crear un fork o enviar un pull request.
+Las contribuciones son bienvenidas. Consultá
+[CONTRIBUTING.md](CONTRIBUTING.md) para preparar el entorno, proponer una
+funcionalidad, implementar cambios, ejecutar las verificaciones y abrir un pull
+request.
+
+También podés
+[reportar un bug](https://github.com/neftalito/Cartelera-UNLP-App/issues/new?template=bug_report.yml)
+o
+[proponer una funcionalidad](https://github.com/neftalito/Cartelera-UNLP-App/issues/new?template=feature_request.yml)
+mediante los formularios del repositorio.
 
 <a href="https://github.com/neftalito/Cartelera-UNLP-App/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=neftalito/Cartelera-UNLP-App" alt="Contribuidores del proyecto" />

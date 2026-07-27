@@ -1,7 +1,7 @@
 /**
  * Verifica que las notificaciones de cursadas acepten snapshots vigentes o posteriores.
  */
-package com.overcoders.unlpcarteleranotifier.ui
+package com.overcoders.unlpcarteleranotifier.ui.cursadas
 
 import com.overcoders.unlpcarteleranotifier.model.CursadaInfo
 import com.overcoders.unlpcarteleranotifier.model.CursadaNotificationTarget

@@ -1,7 +1,7 @@
 /**
  * Resuelve destinos de cartelera contra anuncios cargados y su restauración paginada.
  */
-package com.overcoders.unlpcarteleranotifier.ui
+package com.overcoders.unlpcarteleranotifier.ui.cartelera
 
 import com.overcoders.unlpcarteleranotifier.model.CarteleraNotificationTarget
 import com.overcoders.unlpcarteleranotifier.model.Mensaje
@@ -71,3 +71,39 @@ internal enum class CarteleraTargetRefreshState {
     IN_PROGRESS,
     COMPLETED,
 }
+
+internal fun notificationTargetFilterId(
+    targetMateriaId: String?,
+    availableMateriaIds: Set<String>,
+    useGlobalFallback: Boolean = false,
+): String? = if (useGlobalFallback) {
+    null
+} else {
+    targetMateriaId?.takeIf(availableMateriaIds::contains)
+}
+
+internal enum class NotificationSearchDecision {
+    LOAD_NEXT_PAGE,
+    RETRY_GLOBAL_FEED,
+    NOT_FOUND,
+    SEARCH_LIMIT_REACHED,
+}
+
+internal fun notificationSearchDecision(
+    hasMore: Boolean,
+    automaticallyLoadedPages: Int,
+    searchedWithMateriaFilter: Boolean = false,
+    globalFallbackAttempted: Boolean = false,
+    isLocalRestoration: Boolean = false,
+    maximumAutomaticPages: Int = DEFAULT_NOTIFICATION_SEARCH_PAGE_LIMIT,
+): NotificationSearchDecision = when {
+    hasMore && automaticallyLoadedPages < maximumAutomaticPages ->
+        NotificationSearchDecision.LOAD_NEXT_PAGE
+    searchedWithMateriaFilter && !globalFallbackAttempted && !isLocalRestoration ->
+        NotificationSearchDecision.RETRY_GLOBAL_FEED
+    !hasMore -> NotificationSearchDecision.NOT_FOUND
+    else ->
+        NotificationSearchDecision.SEARCH_LIMIT_REACHED
+}
+
+internal const val DEFAULT_NOTIFICATION_SEARCH_PAGE_LIMIT = 5

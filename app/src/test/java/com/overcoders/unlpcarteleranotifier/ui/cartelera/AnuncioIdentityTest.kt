@@ -1,5 +1,5 @@
 /** Verifica unicidad y estabilidad de las claves guardables de anuncios. */
-package com.overcoders.unlpcarteleranotifier.ui
+package com.overcoders.unlpcarteleranotifier.ui.cartelera
 
 import com.overcoders.unlpcarteleranotifier.model.Adjunto
 import com.overcoders.unlpcarteleranotifier.model.Mensaje
