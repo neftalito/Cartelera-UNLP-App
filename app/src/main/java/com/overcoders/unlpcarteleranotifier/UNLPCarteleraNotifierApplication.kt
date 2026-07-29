@@ -11,5 +11,8 @@ class UNLPCarteleraNotifierApplication : Application() {
         super.onCreate()
         FirebaseInitializer.ensureInitialized(this)
         FirebaseTopicSyncManager.requestRegistration(this)
+        // Sincronizar desde el arranque también permite que release retire avisos_testing
+        // si encuentra estado persistido por una compilación debug anterior.
+        FirebaseTopicSyncManager.requestSync(this)
     }
 }

@@ -63,6 +63,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        notificationOpenEventId.longValue =
+            savedInstanceState?.getLong(KEY_NOTIFICATION_OPEN_EVENT_ID, 0L) ?: 0L
+        activeNotificationKind.value = savedInstanceState
+            ?.getString(KEY_ACTIVE_NOTIFICATION_KIND)
+            ?.let { savedKind ->
+                NotificationOpenKind.entries.firstOrNull { it.name == savedKind }
+            }
         consumePendingNotificationTarget()
         enableEdgeToEdge()
         setContent {
@@ -82,6 +89,17 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putLong(
+            KEY_NOTIFICATION_OPEN_EVENT_ID,
+            notificationOpenEventId.longValue,
+        )
+        activeNotificationKind.value?.let { kind ->
+            outState.putString(KEY_ACTIVE_NOTIFICATION_KIND, kind.name)
+        }
+        super.onSaveInstanceState(outState)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -147,5 +165,7 @@ class MainActivity : ComponentActivity() {
     private companion object {
         const val PERMISSION_PROMPT_PREFERENCES = "runtime_permission_prompts"
         const val KEY_NOTIFICATION_PERMISSION_REQUESTED = "notification_permission_requested"
+        const val KEY_NOTIFICATION_OPEN_EVENT_ID = "notification_open_event_id"
+        const val KEY_ACTIVE_NOTIFICATION_KIND = "active_notification_kind"
     }
 }

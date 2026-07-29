@@ -22,6 +22,6 @@ data class CursadaNotificationTarget(
 data class AvisoNotificationTarget(
     val titulo: String,
     val mensaje: String,
-    val autor: String,
+    val mensajeDetallado: String,
     val fecha: String
 ) : Serializable

@@ -6,12 +6,25 @@ import org.junit.Test
 
 class FirebaseTopicsTest {
     @Test
-    fun usesExpectedGlobalTopics() {
+    fun releaseUsesOnlyProductionGlobalTopics() {
         assertEquals(
             setOf("materias_all", "avisos_all"),
             FirebaseTopics.desiredTopics(
                 notifyAll = true,
                 subscribedMateriaIds = setOf("12"),
+                includeTestingAvisos = false,
+            ),
+        )
+    }
+
+    @Test
+    fun debugAlsoUsesTestingAvisosTopic() {
+        assertEquals(
+            setOf("materias_all", "avisos_all", "avisos_testing"),
+            FirebaseTopics.desiredTopics(
+                notifyAll = true,
+                subscribedMateriaIds = emptySet(),
+                includeTestingAvisos = true,
             ),
         )
     }
@@ -25,6 +38,7 @@ class FirebaseTopicsTest {
             FirebaseTopics.desiredTopics(
                 notifyAll = false,
                 subscribedMateriaIds = setOf(" 12 ", "12/3", "0", " "),
+                includeTestingAvisos = false,
             ),
         )
     }

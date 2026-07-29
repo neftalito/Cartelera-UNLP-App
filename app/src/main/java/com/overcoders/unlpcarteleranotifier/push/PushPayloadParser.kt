@@ -38,10 +38,12 @@ internal fun parsePushPayload(data: Map<String, String>): PushPayload? {
 
         "aviso" -> {
             if (!data.hasFields(AVISO_FIELDS)) return null
+            val summary = data.value("mensaje_resumen") ?: return null
+            val detailedMessage = data.value("mensaje_detallado") ?: return null
             createAvisoNotificationTarget(
                 titulo = data["titulo"],
-                mensaje = data["mensaje"],
-                autor = data["autor"],
+                mensaje = summary,
+                mensajeDetallado = detailedMessage,
                 fecha = data["fecha"]
             )?.let(PushPayload::Aviso)
         }
@@ -66,4 +68,9 @@ private val CARTELERA_FIELDS = setOf(
     "is_anulado",
 )
 private val CURSADA_FIELDS = setOf("materia_id", "materia", "fecha_modificacion")
-private val AVISO_FIELDS = setOf("titulo", "mensaje", "autor", "fecha")
+private val AVISO_FIELDS = setOf(
+    "titulo",
+    "mensaje_resumen",
+    "mensaje_detallado",
+    "fecha",
+)

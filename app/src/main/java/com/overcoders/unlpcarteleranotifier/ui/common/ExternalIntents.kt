@@ -19,6 +19,39 @@ internal fun Context.openExternalUrl(url: String): Boolean {
     }.getOrDefault(false)
 }
 
+internal fun Context.openPlayStoreListing(): Boolean {
+    val listingUrl = playStoreWebUrl(packageName)
+    val playStoreIntent = Intent(
+        Intent.ACTION_VIEW,
+        listingUrl.toUri()
+    ).apply {
+        setPackage("com.android.vending")
+        if (this@openPlayStoreListing !is Activity) {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+    }
+
+    return openWithFallback(
+        primary = {
+            runCatching {
+                startActivity(playStoreIntent)
+                true
+            }.getOrDefault(false)
+        },
+        fallback = {
+            openExternalUrl(listingUrl)
+        },
+    )
+}
+
+internal fun playStoreWebUrl(packageName: String): String =
+    "https://play.google.com/store/apps/details?id=$packageName"
+
+internal fun openWithFallback(
+    primary: () -> Boolean,
+    fallback: () -> Boolean,
+): Boolean = primary() || fallback()
+
 internal fun normalizeExternalHttpUrl(url: String): String? = runCatching {
     val normalized = url.trim()
     val uri = URI(normalized)

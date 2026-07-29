@@ -73,6 +73,24 @@ class FirebaseTopicSyncCoordinatorTest {
     }
 
     @Test
+    fun releaseUnsubscribesPersistedTestingTopic() = runBlocking {
+        val operations = FakeOperations(
+            desired = setOf("avisos_all", "materias_all"),
+            state = FirebaseTopicSyncState(
+                topics = setOf("avisos_all", "avisos_testing", "materias_all"),
+                installationId = "fid-1",
+            ),
+        )
+
+        val result = FirebaseTopicSyncCoordinator(emptyList()).sync("fid-1", operations)
+
+        assertTrue(result is FirebaseTopicSyncResult.Synced)
+        assertTrue(operations.subscribed.isEmpty())
+        assertEquals(listOf("avisos_testing"), operations.unsubscribed)
+        assertEquals(setOf("avisos_all", "materias_all"), operations.state.topics)
+    }
+
+    @Test
     fun serializesConcurrentSyncRequests() = runBlocking {
         val active = AtomicInteger(0)
         val maxActive = AtomicInteger(0)

@@ -47,13 +47,17 @@ internal fun createCursadaNotificationTarget(
 internal fun createAvisoNotificationTarget(
     titulo: String?,
     mensaje: String?,
-    autor: String?,
+    mensajeDetallado: String?,
     fecha: String?,
 ): AvisoNotificationTarget? {
+    val normalizedDetailedMessage = mensajeDetallado.optionalText()
+    val normalizedMessage = mensaje.optionalText()
+        ?: normalizedDetailedMessage
+        ?: return null
     return AvisoNotificationTarget(
         titulo = titulo.requiredText() ?: return null,
-        mensaje = mensaje.requiredText() ?: return null,
-        autor = autor.optionalText().orEmpty(),
+        mensaje = normalizedMessage,
+        mensajeDetallado = normalizedDetailedMessage ?: normalizedMessage,
         fecha = fecha.requiredText() ?: return null
     )
 }

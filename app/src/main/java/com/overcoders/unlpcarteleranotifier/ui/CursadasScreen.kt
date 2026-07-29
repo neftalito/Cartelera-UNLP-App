@@ -38,6 +38,7 @@ fun CursadasScreen(
     notificationOpenEventId: Long = 0L,
     activeNotificationKind: NotificationOpenKind? = null,
     onInitialTargetConsumed: () -> Unit = {},
+    onNotificationOpenFinished: (Long) -> Unit = {},
     onTitleChange: (String?) -> Unit = {},
     onFullscreenDetailChange: (Boolean) -> Unit = {},
     onHeaderActionsChange: (List<HeaderAction>) -> Unit = {}
@@ -51,6 +52,11 @@ fun CursadasScreen(
     var selected by remember { mutableStateOf<CursadaInfo?>(null) }
     var selectedMateriaForRestoration by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingTarget by rememberSaveable { mutableStateOf(initialTarget) }
+    var pendingNotificationOpenEventId by rememberSaveable {
+        mutableStateOf<Long?>(
+            if (initialTarget != null) notificationOpenEventId else null
+        )
+    }
     var notificationTargetForRestoration by rememberSaveable {
         mutableStateOf(initialTarget)
     }
@@ -71,8 +77,15 @@ fun CursadasScreen(
         notificationOpenError = null
     }
 
-    fun cancelPendingNotification() {
+    fun finishPendingNotification() {
+        val finishedEventId = pendingNotificationOpenEventId
         pendingTarget = null
+        pendingNotificationOpenEventId = null
+        finishedEventId?.let(onNotificationOpenFinished)
+    }
+
+    fun cancelPendingNotification() {
+        finishPendingNotification()
         notificationTargetForRestoration = null
         confirmedTargetRequestId = null
     }
@@ -151,11 +164,12 @@ fun CursadasScreen(
         }
     }
 
-    LaunchedEffect(initialTarget) {
+    LaunchedEffect(initialTarget, notificationOpenEventId) {
         if (initialTarget != null) {
             selected = null
             selectedMateriaForRestoration = null
             pendingTarget = initialTarget
+            pendingNotificationOpenEventId = notificationOpenEventId
             notificationTargetForRestoration = initialTarget
             targetRequestId += 1
             confirmedTargetRequestId = null
@@ -217,7 +231,7 @@ fun CursadasScreen(
             if (selected != restored) {
                 selected = restored
             }
-            pendingTarget = null
+            finishPendingNotification()
             confirmedTargetRequestId = null
             notificationOpenError = null
         } else if (cursadasState.initialLoadCompleted) {
@@ -248,7 +262,7 @@ fun CursadasScreen(
         }
         cursadasState.markAsSeen(matchingCursada)
         openCursada(matchingCursada)
-        pendingTarget = null
+        finishPendingNotification()
         confirmedTargetRequestId = null
         notificationOpenError = null
     }
@@ -282,9 +296,10 @@ fun CursadasScreen(
         return
     }
 
-    val showNotificationOpeningState = cursadasState.loading && pendingTarget != null
+    val showNotificationOpeningState = pendingTarget != null
     if (showNotificationOpeningState) {
         NotificationOpeningState(
+            errorMessage = cursadasState.loadError ?: cursadasState.warning,
             openingKey = notificationOpenEventId to pendingTarget,
             onCancel = ::cancelPendingNotification,
         )

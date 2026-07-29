@@ -30,7 +30,8 @@ object PushNotificationDispatcher {
     private const val EXTRA_FECHA = "extra_push_fecha"
     private const val EXTRA_AUTOR = "extra_push_autor"
     private const val EXTRA_RESUMEN = "extra_push_resumen"
-    private const val EXTRA_MENSAJE = "extra_push_mensaje"
+    private const val EXTRA_MENSAJE_RESUMEN = "extra_push_mensaje_resumen"
+    private const val EXTRA_MENSAJE_DETALLADO = "extra_push_mensaje_detallado"
     private const val EXTRA_ANULADO = "extra_push_anulado"
     private const val EXTRA_FECHA_MODIFICACION = "extra_push_fecha_modificacion"
     private val CARTELERA_INTENT_EXTRAS = arrayOf(
@@ -52,8 +53,8 @@ object PushNotificationDispatcher {
     private val AVISO_INTENT_EXTRAS = arrayOf(
         EXTRA_PUSH_TYPE,
         EXTRA_TITULO,
-        EXTRA_MENSAJE,
-        EXTRA_AUTOR,
+        EXTRA_MENSAJE_RESUMEN,
+        EXTRA_MENSAJE_DETALLADO,
         EXTRA_FECHA,
     )
 
@@ -97,8 +98,8 @@ object PushNotificationDispatcher {
             NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle(target.titulo)
-                .setContentText(target.autor.ifBlank { "Aviso general" })
-                .setStyle(NotificationCompat.BigTextStyle().bigText(target.mensaje))
+                .setContentText(target.mensaje)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(target.mensajeDetallado))
                 .setContentIntent(avisoPendingIntent(context, target))
                 .setAutoCancel(true)
                 .build()
@@ -158,10 +159,16 @@ object PushNotificationDispatcher {
             }
 
             TYPE_AVISO -> if (source.hasAllExtras(AVISO_INTENT_EXTRAS)) {
+                val summary = source.getStringExtra(EXTRA_MENSAJE_RESUMEN)
+                    .nonBlankOrNull()
+                    ?: return null
+                val detailedMessage = source.getStringExtra(EXTRA_MENSAJE_DETALLADO)
+                    .nonBlankOrNull()
+                    ?: return null
                 createAvisoNotificationTarget(
                     titulo = source.getStringExtra(EXTRA_TITULO),
-                    mensaje = source.getStringExtra(EXTRA_MENSAJE),
-                    autor = source.getStringExtra(EXTRA_AUTOR),
+                    mensaje = summary,
+                    mensajeDetallado = detailedMessage,
                     fecha = source.getStringExtra(EXTRA_FECHA),
                 )?.let(NotificationOpenTarget::Aviso)
             } else {
@@ -173,6 +180,9 @@ object PushNotificationDispatcher {
     }
 
     private fun Intent.hasAllExtras(names: Array<String>): Boolean = names.all(::hasExtra)
+
+    private fun String?.nonBlankOrNull(): String? =
+        this?.takeIf(String::isNotBlank)
 
     private fun carteleraPendingIntent(
         context: Context,
@@ -226,8 +236,8 @@ object PushNotificationDispatcher {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
             putExtra(EXTRA_PUSH_TYPE, TYPE_AVISO)
             putExtra(EXTRA_TITULO, target.titulo)
-            putExtra(EXTRA_MENSAJE, target.mensaje)
-            putExtra(EXTRA_AUTOR, target.autor)
+            putExtra(EXTRA_MENSAJE_RESUMEN, target.mensaje)
+            putExtra(EXTRA_MENSAJE_DETALLADO, target.mensajeDetallado)
             putExtra(EXTRA_FECHA, target.fecha)
         }
         return PendingIntent.getActivity(
@@ -256,8 +266,7 @@ object PushNotificationDispatcher {
         return stableNotificationId(
             TYPE_AVISO,
             target.titulo,
-            target.mensaje,
-            target.autor,
+            target.mensajeDetallado,
             target.fecha
         )
     }

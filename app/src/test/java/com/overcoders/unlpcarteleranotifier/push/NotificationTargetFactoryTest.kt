@@ -42,7 +42,7 @@ class NotificationTargetFactoryTest {
             createAvisoNotificationTarget(
                 titulo = "Aviso",
                 mensaje = " ",
-                autor = "Administración",
+                mensajeDetallado = " ",
                 fecha = "14/07/2026",
             )
         )
@@ -50,7 +50,7 @@ class NotificationTargetFactoryTest {
             createAvisoNotificationTarget(
                 titulo = "Aviso",
                 mensaje = "Contenido vigente",
-                autor = "Administración",
+                mensajeDetallado = "Contenido completo",
                 fecha = " ",
             )
         )
@@ -80,9 +80,22 @@ class NotificationTargetFactoryTest {
             createAvisoNotificationTarget(
                 titulo = " ",
                 mensaje = null,
-                autor = null,
+                mensajeDetallado = null,
                 fecha = null
             )
         )
+    }
+
+    @Test
+    fun usesDetailedMessageAsPreviewWhenSummaryIsMissing() {
+        val target = createAvisoNotificationTarget(
+            titulo = "Aviso",
+            mensaje = null,
+            mensajeDetallado = "Contenido completo",
+            fecha = "14/07/2026",
+        )
+
+        assertEquals("Contenido completo", target?.mensaje)
+        assertEquals("Contenido completo", target?.mensajeDetallado)
     }
 }

@@ -5,6 +5,7 @@ import android.content.Context
 import android.util.Log
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.messaging.FirebaseMessaging
+import com.overcoders.unlpcarteleranotifier.BuildConfig
 import com.overcoders.unlpcarteleranotifier.data.FirebaseTopicSyncStateStore
 import com.overcoders.unlpcarteleranotifier.data.SettingsStore
 import com.overcoders.unlpcarteleranotifier.data.SubscripcionesStore
@@ -72,7 +73,11 @@ internal object FirebaseTopicSyncManager {
                 // ante un error de lectura es más seguro reintentar que aplicar topics por defecto.
                 val notifyAll = SettingsStore.getNotifyAllForTopicSync(context)
                 val subscribedMateriaIds = SubscripcionesStore.getSubscriptionsForTopicSync(context)
-                return FirebaseTopics.desiredTopics(notifyAll, subscribedMateriaIds)
+                return FirebaseTopics.desiredTopics(
+                    notifyAll = notifyAll,
+                    subscribedMateriaIds = subscribedMateriaIds,
+                    includeTestingAvisos = BuildConfig.DEBUG,
+                )
             }
 
             override suspend fun loadState(): FirebaseTopicSyncState =

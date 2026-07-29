@@ -32,10 +32,10 @@ class NotificationOpenTargetStoreTest {
     fun keepsLatestTargetWhenTwoTapsArriveBeforeConsumption() {
         val store = NotificationOpenTargetStore()
         val first = NotificationOpenTarget.Aviso(
-            AvisoNotificationTarget("Primero", "Mensaje", "Autor", "14/07/2026")
+            AvisoNotificationTarget("Primero", "Mensaje", "Detalle", "14/07/2026")
         )
         val latest = NotificationOpenTarget.Aviso(
-            AvisoNotificationTarget("Segundo", "Mensaje", "Autor", "14/07/2026")
+            AvisoNotificationTarget("Segundo", "Mensaje", "Detalle", "14/07/2026")
         )
 
         store.publish(first)

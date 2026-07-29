@@ -9,6 +9,7 @@ import com.overcoders.unlpcarteleranotifier.model.toMateriaCatalogIdOrNull
 object FirebaseTopics {
     const val ALL_MATERIAS = "materias_all"
     const val AVISOS = "avisos_all"
+    const val AVISOS_TESTING = "avisos_testing"
     private const val MATERIA_PREFIX = "materia_"
 
     internal fun forMateria(idMateria: String): String? =
@@ -16,9 +17,15 @@ object FirebaseTopics {
 
     fun desiredTopics(
         notifyAll: Boolean,
-        subscribedMateriaIds: Set<String>
+        subscribedMateriaIds: Set<String>,
+        includeTestingAvisos: Boolean,
     ): Set<String> {
-        // La instalación siempre escucha avisos globales y además el topic general o uno por materia.
+        // Release nunca incluye el topic de testing. Si una instalación cambia de variante,
+        // el reconciliador lo detecta como sobrante y solicita su desuscripción.
+        val avisosTopics = buildSet {
+            add(AVISOS)
+            if (includeTestingAvisos) add(AVISOS_TESTING)
+        }
         val materiasTopics = if (notifyAll) {
             setOf(ALL_MATERIAS)
         } else {
@@ -26,6 +33,6 @@ object FirebaseTopics {
                 .mapNotNull(::forMateria)
                 .toSet()
         }
-        return materiasTopics + AVISOS
+        return materiasTopics + avisosTopics
     }
 }

@@ -4,35 +4,38 @@
 package com.overcoders.unlpcarteleranotifier.navigation
 
 import com.overcoders.unlpcarteleranotifier.model.AvisoNotificationTarget
+import com.overcoders.unlpcarteleranotifier.push.NotificationOpenKind
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Verifica el texto que la app muestra al abrir avisos generales. */
 class AppDialogsTest {
     @Test
-    fun includesMessageAuthorAndDateWhenAvailable() {
+    fun includesDetailedMessageAndDate() {
         val body = avisoDialogBody(
             AvisoNotificationTarget(
                 titulo = "Mantenimiento",
                 mensaje = "El servicio estará pausado.",
-                autor = "Administración",
+                mensajeDetallado = "El servicio estará pausado hasta las 18.",
                 fecha = "14/07/2026",
             )
         )
 
-        assertTrue(body.contains("El servicio estará pausado."))
-        assertTrue(body.contains("Autor: Administración"))
+        assertTrue(body.contains("El servicio estará pausado hasta las 18."))
+        assertFalse(body.contains("El servicio estará pausado.\n\n"))
         assertTrue(body.contains("Fecha: 14/07/2026"))
     }
 
     @Test
-    fun omitsOnlyTheOptionalAuthor() {
+    fun doesNotRenderTheLegacyAuthorLabel() {
         val body = avisoDialogBody(
             AvisoNotificationTarget(
                 titulo = "Aviso",
                 mensaje = "Mensaje vigente.",
-                autor = "",
+                mensajeDetallado = "Mensaje vigente.",
                 fecha = "14/07/2026",
             )
         )
@@ -40,5 +43,53 @@ class AppDialogsTest {
         assertTrue(body.contains("Mensaje vigente."))
         assertTrue(body.contains("Fecha: 14/07/2026"))
         assertFalse(body.contains("Autor:"))
+    }
+
+    @Test
+    fun updateDialogExplainsWhenTheStoreCouldNotBeOpened() {
+        assertFalse(updateAvailableDialogBody(storeOpenFailed = false).contains("No se pudo"))
+        assertTrue(updateAvailableDialogBody(storeOpenFailed = true).contains("No se pudo"))
+    }
+
+    @Test
+    fun staleNotificationCompletionDoesNotClearANewerOpening() {
+        assertEquals(
+            12L,
+            pendingNotificationOpenAfterFinished(
+                pendingEventId = 12L,
+                finishedEventId = 11L,
+            )
+        )
+        assertNull(
+            pendingNotificationOpenAfterFinished(
+                pendingEventId = 12L,
+                finishedEventId = 12L,
+            )
+        )
+    }
+
+    @Test
+    fun leavingNotificationDestinationFinishesOnlyTheActiveScreenOpening() {
+        assertFalse(
+            shouldFinishNotificationOpenOnNavigation(
+                pendingEventId = 12L,
+                activeKind = NotificationOpenKind.CARTELERA,
+                destination = AppDestinations.CARTELERA,
+            )
+        )
+        assertTrue(
+            shouldFinishNotificationOpenOnNavigation(
+                pendingEventId = 12L,
+                activeKind = NotificationOpenKind.CARTELERA,
+                destination = AppDestinations.CURSADAS,
+            )
+        )
+        assertFalse(
+            shouldFinishNotificationOpenOnNavigation(
+                pendingEventId = 12L,
+                activeKind = NotificationOpenKind.AVISO,
+                destination = AppDestinations.CURSADAS,
+            )
+        )
     }
 }

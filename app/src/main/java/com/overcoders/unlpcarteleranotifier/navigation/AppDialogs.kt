@@ -1,5 +1,5 @@
 /**
- * Reúne los diálogos globales de avisos, suscripciones bloqueadas y reseña.
+ * Reúne los diálogos globales de avisos, actualizaciones, suscripciones y reseña.
  */
 package com.overcoders.unlpcarteleranotifier.navigation
 
@@ -10,9 +10,15 @@ import androidx.compose.runtime.Composable
 import com.overcoders.unlpcarteleranotifier.model.AvisoNotificationTarget
 
 internal fun avisoDialogBody(target: AvisoNotificationTarget): String = buildList {
-    add(target.mensaje)
-    target.autor.takeIf(String::isNotBlank)?.let { add("Autor: $it") }
+    add(target.mensajeDetallado)
     add("Fecha: ${target.fecha}")
+}.joinToString(separator = "\n\n")
+
+internal fun updateAvailableDialogBody(storeOpenFailed: Boolean): String = buildList {
+    add("Hay una nueva versión disponible en Google Play.")
+    if (storeOpenFailed) {
+        add("No se pudo abrir Google Play en este dispositivo.")
+    }
 }.joinToString(separator = "\n\n")
 
 /** Muestra el contenido completo de un aviso general abierto desde una notificación. */
@@ -28,6 +34,31 @@ internal fun AvisoNotificationDialog(
         confirmButton = {
             TextButton(onClick = onDismiss) {
                 Text("Cerrar")
+            }
+        }
+    )
+}
+
+@Composable
+internal fun UpdateAvailableDialog(
+    storeOpenFailed: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Actualización disponible") },
+        text = {
+            Text(updateAvailableDialogBody(storeOpenFailed))
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Actualizar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Más tarde")
             }
         }
     )

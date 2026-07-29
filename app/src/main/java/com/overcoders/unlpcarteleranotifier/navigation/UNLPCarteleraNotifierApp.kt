@@ -53,11 +53,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.overcoders.unlpcarteleranotifier.BuildConfig
 import com.overcoders.unlpcarteleranotifier.HeaderAction
 import com.overcoders.unlpcarteleranotifier.HeaderActionPlacement
 import com.overcoders.unlpcarteleranotifier.data.SettingsStore
 import com.overcoders.unlpcarteleranotifier.data.SubscripcionesStore
+import com.overcoders.unlpcarteleranotifier.data.UPDATE_PROMPT_COOLDOWN_MILLIS
 import com.overcoders.unlpcarteleranotifier.model.AvisoNotificationTarget
 import com.overcoders.unlpcarteleranotifier.model.CarteleraNotificationTarget
 import com.overcoders.unlpcarteleranotifier.model.CursadaNotificationTarget
@@ -74,9 +79,42 @@ import com.overcoders.unlpcarteleranotifier.ui.OptativeSubjectsScreen
 import com.overcoders.unlpcarteleranotifier.ui.StudyPlansScreen
 import com.overcoders.unlpcarteleranotifier.ui.SubscripcionesScreen
 import com.overcoders.unlpcarteleranotifier.ui.common.openExternalUrl
+import com.overcoders.unlpcarteleranotifier.ui.common.openPlayStoreListing
+import com.overcoders.unlpcarteleranotifier.update.PLAY_UPDATE_CHECK_TIMEOUT_MILLIS
+import com.overcoders.unlpcarteleranotifier.update.PlayUpdateChecker
+import com.overcoders.unlpcarteleranotifier.update.PlayUpdateCheckResult
+import com.overcoders.unlpcarteleranotifier.update.PlayUpdateCheckTrigger
+import com.overcoders.unlpcarteleranotifier.update.PlayUpdateStatus
+import com.overcoders.unlpcarteleranotifier.update.isAvailableUpdateNewerThanInstalled
+import com.overcoders.unlpcarteleranotifier.update.reducePlayUpdateResult
+import com.overcoders.unlpcarteleranotifier.update.remainingPlayUpdateCheckDelayMillis
+import com.overcoders.unlpcarteleranotifier.update.shouldCheckForPlayUpdate
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+
+internal fun pendingNotificationOpenAfterFinished(
+    pendingEventId: Long?,
+    finishedEventId: Long,
+): Long? = pendingEventId.takeUnless { it == finishedEventId }
+
+internal fun shouldFinishNotificationOpenOnNavigation(
+    pendingEventId: Long?,
+    activeKind: NotificationOpenKind?,
+    destination: AppDestinations,
+): Boolean {
+    if (pendingEventId == null) return false
+    val notificationDestination = when (activeKind) {
+        NotificationOpenKind.CARTELERA -> AppDestinations.CARTELERA
+        NotificationOpenKind.CURSADA -> AppDestinations.CURSADAS
+        NotificationOpenKind.AVISO,
+        null,
+        -> return false
+    }
+    return destination != notificationDestination
+}
 
 /**
  * Orquesta la navegación principal y conserva el contexto mínimo necesario para
@@ -95,6 +133,7 @@ fun UNLPCarteleraNotifierApp(
     onAvisoTargetConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.CARTELERA) }
     var selectedCategory by rememberSaveable { mutableStateOf(MainCategory.MATERIAS) }
@@ -131,6 +170,17 @@ fun UNLPCarteleraNotifierApp(
     val notifyAll = notifyAllPreference == true
     var showSubscriptionsBlockedDialog by remember { mutableStateOf(false) }
     var showReviewPromptDialog by rememberSaveable { mutableStateOf(false) }
+    var playUpdateStatus by rememberSaveable {
+        mutableStateOf(PlayUpdateStatus.NOT_CHECKED)
+    }
+    var availableUpdateVersionCode by rememberSaveable { mutableStateOf<Int?>(null) }
+    var lastUpdateCheckAtEpochMillis by rememberSaveable { mutableStateOf<Long?>(null) }
+    var updateCheckInProgress by remember { mutableStateOf(false) }
+    var updateCheckRequestId by remember { mutableIntStateOf(0) }
+    var updatePromptEligibilityRequestId by remember { mutableIntStateOf(0) }
+    var updatePromptEligible by rememberSaveable { mutableStateOf(false) }
+    var updatePromptRecheckAtEpochMillis by rememberSaveable { mutableStateOf<Long?>(null) }
+    var updateStoreOpenFailed by rememberSaveable { mutableStateOf(false) }
     var appOpenRegistered by rememberSaveable { mutableStateOf(false) }
     var suppressReviewPromptForNotificationOpen by rememberSaveable {
         mutableStateOf(
@@ -140,6 +190,24 @@ fun UNLPCarteleraNotifierApp(
         )
     }
     var pendingAvisoTarget by rememberSaveable { mutableStateOf(initialAvisoTarget) }
+    var pendingNotificationOpenEventId by rememberSaveable {
+        mutableStateOf<Long?>(
+            if (
+                initialCarteleraTarget != null ||
+                initialCursadaTarget != null ||
+                initialAvisoTarget != null
+            ) {
+                notificationOpenEventId
+            } else {
+                null
+            }
+        )
+    }
+    val notificationOpenInProgress =
+        pendingNotificationOpenEventId != null ||
+            initialCarteleraTarget != null ||
+            initialCursadaTarget != null ||
+            pendingAvisoTarget != null
     var highlightNotifyAllRequest by remember { mutableIntStateOf(0) }
     val colorScheme = MaterialTheme.colorScheme
     var headerActionsByDestination by remember {
@@ -182,6 +250,48 @@ fun UNLPCarteleraNotifierApp(
         fullscreenDetailByDestination = updated
     }
 
+    fun requestPlayUpdateCheck(trigger: PlayUpdateCheckTrigger) {
+        val shouldCheck = shouldCheckForPlayUpdate(
+            status = playUpdateStatus,
+            lastCheckAtEpochMillis = lastUpdateCheckAtEpochMillis,
+            nowEpochMillis = System.currentTimeMillis(),
+            isCheckInProgress = updateCheckInProgress,
+            trigger = trigger,
+        )
+        if (!shouldCheck) return
+
+        updateCheckInProgress = true
+        updateCheckRequestId += 1
+    }
+
+    fun finishNotificationOpen(eventId: Long) {
+        pendingNotificationOpenEventId = pendingNotificationOpenAfterFinished(
+            pendingEventId = pendingNotificationOpenEventId,
+            finishedEventId = eventId,
+        )
+    }
+
+    fun postponeUpdatePrompt(versionCode: Int) {
+        val postponedAtEpochMillis = System.currentTimeMillis()
+        updatePromptEligible = false
+        updatePromptRecheckAtEpochMillis =
+            postponedAtEpochMillis + UPDATE_PROMPT_COOLDOWN_MILLIS
+        updateStoreOpenFailed = false
+        scope.launch {
+            try {
+                SettingsStore.postponeUpdatePrompt(
+                    context = context,
+                    availableVersionCode = versionCode,
+                    nowEpochMillis = postponedAtEpochMillis,
+                )
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                // El cierre local sigue siendo válido aunque no pueda persistirse el cooldown.
+            }
+        }
+    }
+
     fun navigateTo(
         destination: AppDestinations,
         category: MainCategory = selectedCategory,
@@ -190,6 +300,16 @@ fun UNLPCarteleraNotifierApp(
     ) {
         val sameState = destination == currentDestination && category == selectedCategory
         if (sameState) return
+        val pendingNotificationEventId = pendingNotificationOpenEventId
+        if (
+            shouldFinishNotificationOpenOnNavigation(
+                pendingEventId = pendingNotificationEventId,
+                activeKind = activeNotificationKind,
+                destination = destination,
+            )
+        ) {
+            finishNotificationOpen(requireNotNull(pendingNotificationEventId))
+        }
         if (addToHistory) {
             if (navigationHistory.size >= MAX_HISTORY_SIZE) {
                 navigationHistory.removeAt(0)
@@ -232,9 +352,10 @@ fun UNLPCarteleraNotifierApp(
         )
     }
 
-    LaunchedEffect(initialCarteleraTarget) {
+    LaunchedEffect(initialCarteleraTarget, notificationOpenEventId) {
         if (initialCarteleraTarget != null) {
             suppressReviewPromptForNotificationOpen = true
+            pendingNotificationOpenEventId = notificationOpenEventId
             showSubscriptionsBlockedDialog = false
             pendingAvisoTarget = null
             navigateTo(
@@ -245,9 +366,10 @@ fun UNLPCarteleraNotifierApp(
         }
     }
 
-    LaunchedEffect(initialCursadaTarget) {
+    LaunchedEffect(initialCursadaTarget, notificationOpenEventId) {
         if (initialCursadaTarget != null) {
             suppressReviewPromptForNotificationOpen = true
+            pendingNotificationOpenEventId = notificationOpenEventId
             showSubscriptionsBlockedDialog = false
             pendingAvisoTarget = null
             navigateTo(
@@ -258,12 +380,139 @@ fun UNLPCarteleraNotifierApp(
         }
     }
 
-    LaunchedEffect(initialAvisoTarget) {
+    LaunchedEffect(initialAvisoTarget, notificationOpenEventId) {
         if (initialAvisoTarget != null) {
             suppressReviewPromptForNotificationOpen = true
+            pendingNotificationOpenEventId = notificationOpenEventId
             showSubscriptionsBlockedDialog = false
             pendingAvisoTarget = initialAvisoTarget
         }
+    }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        if (playUpdateStatus == PlayUpdateStatus.AVAILABLE) {
+            updatePromptEligibilityRequestId += 1
+        }
+        requestPlayUpdateCheck(PlayUpdateCheckTrigger.RESUME)
+    }
+
+    LaunchedEffect(updateCheckRequestId) {
+        if (updateCheckRequestId == 0) return@LaunchedEffect
+
+        try {
+            val result = withTimeoutOrNull(PLAY_UPDATE_CHECK_TIMEOUT_MILLIS) {
+                PlayUpdateChecker.check(context)
+            } ?: PlayUpdateCheckResult.Unavailable
+            val checkedAt = System.currentTimeMillis()
+            val nextState = reducePlayUpdateResult(
+                currentStatus = playUpdateStatus,
+                currentAvailableVersionCode = availableUpdateVersionCode,
+                result = result,
+            )
+            availableUpdateVersionCode = nextState.availableVersionCode
+            playUpdateStatus = nextState.status
+            lastUpdateCheckAtEpochMillis = checkedAt
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            val nextState = reducePlayUpdateResult(
+                currentStatus = playUpdateStatus,
+                currentAvailableVersionCode = availableUpdateVersionCode,
+                result = PlayUpdateCheckResult.Unavailable,
+            )
+            availableUpdateVersionCode = nextState.availableVersionCode
+            playUpdateStatus = nextState.status
+            lastUpdateCheckAtEpochMillis = System.currentTimeMillis()
+        } finally {
+            updateCheckInProgress = false
+        }
+    }
+
+    LaunchedEffect(playUpdateStatus, lastUpdateCheckAtEpochMillis, lifecycleOwner) {
+        val retryDelayMillis = remainingPlayUpdateCheckDelayMillis(
+            status = playUpdateStatus,
+            lastCheckAtEpochMillis = lastUpdateCheckAtEpochMillis,
+            nowEpochMillis = System.currentTimeMillis(),
+        ) ?: return@LaunchedEffect
+
+        if (retryDelayMillis > 0L) {
+            delay(retryDelayMillis)
+        }
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            requestPlayUpdateCheck(PlayUpdateCheckTrigger.SCHEDULED)
+        }
+    }
+
+    LaunchedEffect(
+        playUpdateStatus,
+        availableUpdateVersionCode,
+        updatePromptEligibilityRequestId,
+    ) {
+        val versionCode = availableUpdateVersionCode
+        if (playUpdateStatus != PlayUpdateStatus.AVAILABLE || versionCode == null) {
+            updatePromptEligible = false
+            updatePromptRecheckAtEpochMillis = null
+            updateStoreOpenFailed = false
+            return@LaunchedEffect
+        }
+
+        if (
+            !isAvailableUpdateNewerThanInstalled(
+                availableVersionCode = versionCode,
+                installedVersionCode = BuildConfig.VERSION_CODE,
+            )
+        ) {
+            availableUpdateVersionCode = null
+            playUpdateStatus = PlayUpdateStatus.NOT_CHECKED
+            lastUpdateCheckAtEpochMillis = null
+            updatePromptEligible = false
+            updatePromptRecheckAtEpochMillis = null
+            updateStoreOpenFailed = false
+            if (!updateCheckInProgress) {
+                updateCheckInProgress = true
+                updateCheckRequestId += 1
+            }
+            return@LaunchedEffect
+        }
+
+        val evaluatedAtEpochMillis = System.currentTimeMillis()
+        val decision = try {
+            SettingsStore.updatePromptDecision(
+                context = context,
+                availableVersionCode = versionCode,
+                nowEpochMillis = evaluatedAtEpochMillis,
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
+        updatePromptEligible = decision?.shouldShow ?: true
+        updatePromptRecheckAtEpochMillis = decision?.remainingCooldownMillis?.let { remaining ->
+            evaluatedAtEpochMillis + remaining
+        }
+        updateStoreOpenFailed = false
+    }
+
+    LaunchedEffect(
+        playUpdateStatus,
+        availableUpdateVersionCode,
+        updatePromptRecheckAtEpochMillis,
+    ) {
+        if (
+            playUpdateStatus != PlayUpdateStatus.AVAILABLE ||
+            availableUpdateVersionCode == null
+        ) {
+            return@LaunchedEffect
+        }
+        val recheckAtEpochMillis =
+            updatePromptRecheckAtEpochMillis ?: return@LaunchedEffect
+        val waitMillis =
+            (recheckAtEpochMillis - System.currentTimeMillis()).coerceAtLeast(0L)
+        if (waitMillis > 0L) {
+            delay(waitMillis)
+        }
+        updatePromptEligibilityRequestId += 1
     }
 
     LaunchedEffect(Unit) {
@@ -309,10 +558,18 @@ fun UNLPCarteleraNotifierApp(
         }
     }
 
+    val updateVersionCode = availableUpdateVersionCode
+    val hasNewerAvailableUpdate =
+        playUpdateStatus == PlayUpdateStatus.AVAILABLE &&
+            isAvailableUpdateNewerThanInstalled(
+                availableVersionCode = updateVersionCode,
+                installedVersionCode = BuildConfig.VERSION_CODE,
+            )
     if (pendingAvisoTarget != null) {
         AvisoNotificationDialog(
             target = pendingAvisoTarget!!,
             onDismiss = {
+                pendingNotificationOpenEventId?.let(::finishNotificationOpen)
                 pendingAvisoTarget = null
                 onAvisoTargetConsumed()
             }
@@ -336,7 +593,31 @@ fun UNLPCarteleraNotifierApp(
                 showSubscriptionsBlockedDialog = false
             }
         )
-    } else if (showReviewPromptDialog && !suppressReviewPromptForNotificationOpen) {
+    } else if (
+        hasNewerAvailableUpdate &&
+        updateVersionCode != null &&
+        updatePromptEligible &&
+        !notificationOpenInProgress
+    ) {
+        UpdateAvailableDialog(
+            storeOpenFailed = updateStoreOpenFailed,
+            onDismiss = {
+                postponeUpdatePrompt(updateVersionCode)
+            },
+            onConfirm = {
+                if (context.openPlayStoreListing()) {
+                    postponeUpdatePrompt(updateVersionCode)
+                } else {
+                    updateStoreOpenFailed = true
+                }
+            }
+        )
+    } else if (
+        showReviewPromptDialog &&
+        playUpdateStatus == PlayUpdateStatus.NOT_AVAILABLE &&
+        !updateCheckInProgress &&
+        !suppressReviewPromptForNotificationOpen
+    ) {
         ReviewPromptDialog(
             onDismiss = {
                 consumeReviewPrompt()
@@ -638,6 +919,7 @@ fun UNLPCarteleraNotifierApp(
                         activeNotificationKind = activeNotificationKind,
                         onCarteleraTargetConsumed = onCarteleraTargetConsumed,
                         onCursadaTargetConsumed = onCursadaTargetConsumed,
+                        onNotificationOpenFinished = ::finishNotificationOpen,
                         highlightNotifyAllRequest = highlightNotifyAllRequest,
                         onHighlightNotifyAllConsumed = { highlightNotifyAllRequest = 0 },
                         onHeaderActionsChange = { updateHeaderActions(destination, it) },
@@ -660,6 +942,7 @@ private fun AppDestinationContent(
     activeNotificationKind: NotificationOpenKind?,
     onCarteleraTargetConsumed: () -> Unit,
     onCursadaTargetConsumed: () -> Unit,
+    onNotificationOpenFinished: (Long) -> Unit,
     highlightNotifyAllRequest: Int,
     onHighlightNotifyAllConsumed: () -> Unit,
     onHeaderActionsChange: (List<HeaderAction>) -> Unit,
@@ -672,6 +955,7 @@ private fun AppDestinationContent(
             notificationOpenEventId = notificationOpenEventId,
             activeNotificationKind = activeNotificationKind,
             onInitialTargetConsumed = onCarteleraTargetConsumed,
+            onNotificationOpenFinished = onNotificationOpenFinished,
             onTitleChange = onTitleChange,
             onFullscreenDetailChange = onFullscreenDetailChange,
             onHeaderActionsChange = onHeaderActionsChange
@@ -682,6 +966,7 @@ private fun AppDestinationContent(
             notificationOpenEventId = notificationOpenEventId,
             activeNotificationKind = activeNotificationKind,
             onInitialTargetConsumed = onCursadaTargetConsumed,
+            onNotificationOpenFinished = onNotificationOpenFinished,
             onTitleChange = onTitleChange,
             onFullscreenDetailChange = onFullscreenDetailChange,
             onHeaderActionsChange = onHeaderActionsChange

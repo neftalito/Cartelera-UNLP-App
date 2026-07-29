@@ -100,6 +100,10 @@ fun PushInfoCard(
                     style = MaterialTheme.typography.bodySmall
                 )
                 Text(
+                    text = "Tópico avisos de testing: ${FirebaseTopics.AVISOS_TESTING}",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
                     text = if (syncedTopics.isEmpty()) {
                         "Topics sincronizados: todavía no hay ninguno persistido."
                     } else {
@@ -262,8 +266,8 @@ fun DebugPushTestsCard(
                         context = context,
                         target = AvisoNotificationTarget(
                             titulo = "Aviso general de prueba",
-                            mensaje = "Este push prueba el nuevo topic de avisos para todas las instalaciones.",
-                            autor = "Servidor Firebase",
+                            mensaje = "El servicio estará en mantenimiento desde las 18.",
+                            mensajeDetallado = "El servicio estará en mantenimiento desde las 18 hasta las 19. Durante ese período algunas secciones podrían no actualizarse.",
                             fecha = "06/07/2026 01:00"
                         )
                     )

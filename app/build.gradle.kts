@@ -123,8 +123,8 @@ android {
         minSdk = 23
         //noinspection OldTargetApi
         targetSdk = 36
-        versionCode = 27
-        versionName = "2.2.2"
+        versionCode = 28
+        versionName = "2.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -201,6 +201,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
+    @Suppress("AvoidDuplicateDependencies")
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
@@ -211,9 +212,12 @@ dependencies {
     implementation(libs.jsoup)
     implementation(libs.firebase.messaging)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.google.play.app.update)
+    implementation(libs.google.play.app.update.ktx)
     testImplementation(libs.junit)
     testImplementation(libs.json)
     androidTestImplementation(libs.androidx.junit)
+    @Suppress("AvoidDuplicateDependencies")
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)

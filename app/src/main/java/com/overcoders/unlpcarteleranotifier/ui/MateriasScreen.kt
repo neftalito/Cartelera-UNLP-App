@@ -61,6 +61,7 @@ fun MateriasScreen(
     notificationOpenEventId: Long = 0L,
     activeNotificationKind: NotificationOpenKind? = null,
     onInitialTargetConsumed: () -> Unit = {},
+    onNotificationOpenFinished: (Long) -> Unit = {},
     onTitleChange: (String?) -> Unit = {},
     onFullscreenDetailChange: (Boolean) -> Unit = {},
     onHeaderActionsChange: (List<HeaderAction>) -> Unit = {}
@@ -97,6 +98,11 @@ fun MateriasScreen(
     var selected by remember { mutableStateOf<Mensaje?>(null) }
     var selectedAnnouncementKey by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingTarget by rememberSaveable { mutableStateOf(initialTarget) }
+    var pendingNotificationOpenEventId by rememberSaveable {
+        mutableStateOf<Long?>(
+            if (initialTarget != null) notificationOpenEventId else null
+        )
+    }
     var notificationTargetForRestoration by rememberSaveable {
         mutableStateOf(initialTarget)
     }
@@ -127,10 +133,17 @@ fun MateriasScreen(
         notificationTargetForRestoration = null
     }
 
+    fun finishPendingNotification() {
+        val finishedEventId = pendingNotificationOpenEventId
+        pendingTarget = null
+        pendingNotificationOpenEventId = null
+        finishedEventId?.let(onNotificationOpenFinished)
+    }
+
     fun cancelPendingNotification() {
         selected = null
         selectedAnnouncementKey = null
-        pendingTarget = null
+        finishPendingNotification()
         notificationTargetForRestoration = null
         notificationAutoPagesLoaded = 0
         notificationGlobalFallbackAttempted = false
@@ -169,7 +182,7 @@ fun MateriasScreen(
                 if (
                     pendingTarget?.localSelectionRestoration()?.announcementKey == keyToRestore
                 ) {
-                    pendingTarget = null
+                    finishPendingNotification()
                     notificationOpenError = null
                     notificationAutoPagesLoaded = 0
                     notificationGlobalFallbackAttempted = false
@@ -213,11 +226,12 @@ fun MateriasScreen(
         }
     }
 
-    LaunchedEffect(initialTarget) {
+    LaunchedEffect(initialTarget, notificationOpenEventId) {
         if (initialTarget != null) {
             selected = null
             selectedAnnouncementKey = null
             pendingTarget = initialTarget
+            pendingNotificationOpenEventId = notificationOpenEventId
             notificationTargetForRestoration = initialTarget
             notificationOpenError = null
             feedState.clearFeedback()
@@ -497,7 +511,7 @@ fun MateriasScreen(
                         pageIndex = absoluteIndex / pageSize,
                     ),
                 )
-                pendingTarget = null
+                finishPendingNotification()
                 notificationOpenError = null
                 notificationAutoPagesLoaded = 0
                 notificationGlobalFallbackAttempted = false

@@ -13,6 +13,7 @@ kotlin = "2.4.10"
 composeBom = "2026.06.01"
 okhttp = "5.4.0"
 fragment = "1.8.9"
+playAppUpdate = "2.1.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -35,6 +36,8 @@ androidx-compose-material3 = { group = "androidx.compose.material3", name = "mat
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 androidx-fragment = { module = "androidx.fragment:fragment", version.ref = "fragment" }
+google-play-app-update = { module = "com.google.android.play:app-update", version.ref = "playAppUpdate" }
+google-play-app-update-ktx = { module = "com.google.android.play:app-update-ktx", version.ref = "playAppUpdate" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

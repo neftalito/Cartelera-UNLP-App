@@ -44,24 +44,55 @@ class PushPayloadParserTest {
     }
 
     @Test
-    fun parsesExpectedAvisoPayloadShape() {
+    fun parsesAvisoPayloadShape() {
         val payload = parsePushPayload(
             mapOf(
                 "type" to "aviso",
                 "titulo" to " Mantenimiento ",
-                "mensaje" to " El servicio estará disponible nuevamente a las 18. ",
-                "autor" to " Cartelera UNLP ",
+                "mensaje_resumen" to " El servicio estará en mantenimiento. ",
+                "mensaje_detallado" to " El servicio estará en mantenimiento hasta las 18. ",
                 "fecha" to " 2026-07-14T15:00:00+00:00 ",
             )
         ) as PushPayload.Aviso
 
         assertEquals("Mantenimiento", payload.target.titulo)
+        assertEquals("El servicio estará en mantenimiento.", payload.target.mensaje)
         assertEquals(
-            "El servicio estará disponible nuevamente a las 18.",
-            payload.target.mensaje,
+            "El servicio estará en mantenimiento hasta las 18.",
+            payload.target.mensajeDetallado,
         )
-        assertEquals("Cartelera UNLP", payload.target.autor)
         assertEquals("2026-07-14T15:00:00+00:00", payload.target.fecha)
+    }
+
+    @Test
+    fun rejectsLegacyAvisoPayloadShape() {
+        assertNull(
+            parsePushPayload(
+                mapOf(
+                    "type" to "aviso",
+                    "titulo" to "Inscripciones",
+                    "mensaje" to "Comienzan las inscripciones.",
+                    "autor" to "Cartelera UNLP",
+                    "fecha" to "2026-07-14T15:00:00+00:00",
+                )
+            )
+        )
+    }
+
+    @Test
+    fun rejectsAvisoWhenEitherCurrentMessageFieldIsMissingOrBlank() {
+        val validFields = mapOf(
+            "type" to "aviso",
+            "titulo" to "Inscripciones",
+            "mensaje_resumen" to "Comienzan las inscripciones.",
+            "mensaje_detallado" to "Comienzan las inscripciones al primer semestre.",
+            "fecha" to "2026-07-14T15:00:00+00:00",
+        )
+
+        assertNull(parsePushPayload(validFields - "mensaje_resumen"))
+        assertNull(parsePushPayload(validFields - "mensaje_detallado"))
+        assertNull(parsePushPayload(validFields + ("mensaje_resumen" to " ")))
+        assertNull(parsePushPayload(validFields + ("mensaje_detallado" to " ")))
     }
 
     @Test

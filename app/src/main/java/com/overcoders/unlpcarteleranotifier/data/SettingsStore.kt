@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import java.io.IOException
 import kotlinx.coroutines.flow.Flow
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 private val Context.settingsDataStore by preferencesDataStore(name = "settings")
+internal const val UPDATE_PROMPT_COOLDOWN_MILLIS = 48L * 60L * 60L * 1_000L
 
 /**
  * Fuente única de preferencias de usuario y pequeños baselines de interfaz.
@@ -30,6 +32,10 @@ object SettingsStore {
     private val APP_OPEN_COUNT_KEY = intPreferencesKey("app_open_count")
     private val HAS_SHOWN_REVIEW_PROMPT_KEY =
         booleanPreferencesKey("has_shown_review_prompt")
+    private val UPDATE_PROMPT_POSTPONED_VERSION_CODE_KEY =
+        intPreferencesKey("update_prompt_postponed_version_code")
+    private val UPDATE_PROMPT_POSTPONED_AT_EPOCH_MILLIS_KEY =
+        longPreferencesKey("update_prompt_postponed_at_epoch_millis")
 
     fun notifyAllFlow(context: Context): Flow<Boolean> {
         return preferencesFlow(context).map { prefs ->
@@ -94,6 +100,31 @@ object SettingsStore {
         }
     }
 
+    internal suspend fun updatePromptDecision(
+        context: Context,
+        availableVersionCode: Int,
+        nowEpochMillis: Long = System.currentTimeMillis(),
+    ): UpdatePromptDecision {
+        val prefs = preferencesFlow(context).first()
+        return updatePromptDecision(
+            availableVersionCode = availableVersionCode,
+            postponedVersionCode = prefs[UPDATE_PROMPT_POSTPONED_VERSION_CODE_KEY],
+            postponedAtEpochMillis = prefs[UPDATE_PROMPT_POSTPONED_AT_EPOCH_MILLIS_KEY],
+            nowEpochMillis = nowEpochMillis,
+        )
+    }
+
+    internal suspend fun postponeUpdatePrompt(
+        context: Context,
+        availableVersionCode: Int,
+        nowEpochMillis: Long = System.currentTimeMillis(),
+    ) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[UPDATE_PROMPT_POSTPONED_VERSION_CODE_KEY] = availableVersionCode
+            prefs[UPDATE_PROMPT_POSTPONED_AT_EPOCH_MILLIS_KEY] = nowEpochMillis
+        }
+    }
+
     private fun preferencesFlow(context: Context): Flow<Preferences> =
         context.settingsDataStore.data.catch { error ->
             if (error is IOException) {
@@ -104,3 +135,53 @@ object SettingsStore {
         }
 
 }
+
+internal data class UpdatePromptDecision(
+    val shouldShow: Boolean,
+    val remainingCooldownMillis: Long?,
+)
+
+internal fun updatePromptDecision(
+    availableVersionCode: Int,
+    postponedVersionCode: Int?,
+    postponedAtEpochMillis: Long?,
+    nowEpochMillis: Long,
+    cooldownMillis: Long = UPDATE_PROMPT_COOLDOWN_MILLIS,
+): UpdatePromptDecision {
+    if (
+        availableVersionCode != postponedVersionCode ||
+        postponedAtEpochMillis == null
+    ) {
+        return UpdatePromptDecision(
+            shouldShow = true,
+            remainingCooldownMillis = null,
+        )
+    }
+
+    val elapsed = nowEpochMillis - postponedAtEpochMillis
+    if (elapsed < 0L || elapsed >= cooldownMillis) {
+        return UpdatePromptDecision(
+            shouldShow = true,
+            remainingCooldownMillis = null,
+        )
+    }
+
+    return UpdatePromptDecision(
+        shouldShow = false,
+        remainingCooldownMillis = cooldownMillis - elapsed,
+    )
+}
+
+internal fun isUpdatePromptEligible(
+    availableVersionCode: Int,
+    postponedVersionCode: Int?,
+    postponedAtEpochMillis: Long?,
+    nowEpochMillis: Long,
+    cooldownMillis: Long = UPDATE_PROMPT_COOLDOWN_MILLIS,
+): Boolean = updatePromptDecision(
+    availableVersionCode = availableVersionCode,
+    postponedVersionCode = postponedVersionCode,
+    postponedAtEpochMillis = postponedAtEpochMillis,
+    nowEpochMillis = nowEpochMillis,
+    cooldownMillis = cooldownMillis,
+).shouldShow
