@@ -1,3 +1,4 @@
+/** Modela un anuncio de cartelera y sus archivos adjuntos. */
 package com.overcoders.unlpcarteleranotifier.model
 
 data class Mensaje(

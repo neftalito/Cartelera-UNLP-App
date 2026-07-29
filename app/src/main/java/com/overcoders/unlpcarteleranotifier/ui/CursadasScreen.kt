@@ -1,74 +1,42 @@
+/**
+ * Muestra las cursadas publicadas, sus novedades y el detalle abierto desde notificaciones.
+ */
 package com.overcoders.unlpcarteleranotifier.ui
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.content.Intent
-import android.text.method.LinkMovementMethod
-import android.widget.TextView
-import android.widget.Toast
-import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.DoneAll
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import com.overcoders.unlpcarteleranotifier.HeaderAction
-import com.overcoders.unlpcarteleranotifier.data.CursadasStore
 import com.overcoders.unlpcarteleranotifier.model.CursadaInfo
 import com.overcoders.unlpcarteleranotifier.model.CursadaNotificationTarget
-import com.overcoders.unlpcarteleranotifier.worker.CursadasNotificationDispatcher
-import kotlinx.coroutines.Dispatchers
+import com.overcoders.unlpcarteleranotifier.model.cursadaMateriaKey
+import com.overcoders.unlpcarteleranotifier.push.NotificationOpenKind
+import com.overcoders.unlpcarteleranotifier.shouldInvalidatePendingNotification
+import com.overcoders.unlpcarteleranotifier.shouldRestoreNotificationResolution
+import com.overcoders.unlpcarteleranotifier.ui.cursadas.CursadaDetailScreen
+import com.overcoders.unlpcarteleranotifier.ui.cursadas.CursadasScreenContent
+import com.overcoders.unlpcarteleranotifier.ui.cursadas.CursadasScreenContentState
+import com.overcoders.unlpcarteleranotifier.ui.cursadas.cursadaDetailHeaderActions
+import com.overcoders.unlpcarteleranotifier.ui.cursadas.cursadasListHeaderActions
+import com.overcoders.unlpcarteleranotifier.ui.cursadas.findCursadaForNotification
+import com.overcoders.unlpcarteleranotifier.ui.cursadas.isCursadaTargetResolutionConfirmed
+import com.overcoders.unlpcarteleranotifier.ui.cursadas.rememberCursadasState
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.IOException
 
 @Composable
 fun CursadasScreen(
-    initialSelected: CursadaInfo? = null,
     initialTarget: CursadaNotificationTarget? = null,
-    onInitialSelectedConsumed: () -> Unit = {},
+    notificationOpenEventId: Long = 0L,
+    activeNotificationKind: NotificationOpenKind? = null,
     onInitialTargetConsumed: () -> Unit = {},
     onTitleChange: (String?) -> Unit = {},
     onFullscreenDetailChange: (Boolean) -> Unit = {},
@@ -76,103 +44,95 @@ fun CursadasScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-
-    var loading by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var filter by remember { mutableStateOf("") }
-    var selected by remember { mutableStateOf<CursadaInfo?>(null) }
-    var cursadas by remember { mutableStateOf<List<CursadaInfo>>(emptyList()) }
-    var cursadasConNovedades by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var initialLoadCompleted by remember { mutableStateOf(false) }
-    var consumedInitialSelection by remember { mutableStateOf<CursadaInfo?>(null) }
-    var pendingTarget by remember { mutableStateOf<CursadaNotificationTarget?>(null) }
+    val cursadasState = rememberCursadasState()
     val listState = rememberLazyListState()
 
-    suspend fun refresh() {
-        loading = true
-        error = null
-        try {
-            cursadas = withContext(Dispatchers.IO) {
-                CursadasNotificationDispatcher.process(context)
-            }
+    var filter by rememberSaveable { mutableStateOf("") }
+    var selected by remember { mutableStateOf<CursadaInfo?>(null) }
+    var selectedMateriaForRestoration by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingTarget by rememberSaveable { mutableStateOf(initialTarget) }
+    var notificationTargetForRestoration by rememberSaveable {
+        mutableStateOf(initialTarget)
+    }
+    var targetRequestId by remember { mutableLongStateOf(0L) }
+    var confirmedTargetRequestId by remember { mutableStateOf<Long?>(null) }
+    var notificationOpenError by remember { mutableStateOf<String?>(null) }
+    var listFilter by rememberSaveable { mutableStateOf(filter) }
 
-            val vistosPorMateria = withContext(Dispatchers.IO) {
-                CursadasStore.ensureSeenBaseline(context, cursadas)
-            }
+    fun closeSelectedCursada() {
+        selected = null
+        selectedMateriaForRestoration = null
+        notificationTargetForRestoration = null
+    }
 
-            cursadasConNovedades = cursadas
-                .filter { cursada ->
-                    val ultimaVista = vistosPorMateria[cursada.materia] ?: Long.MIN_VALUE
-                    val ultimaActualizacion = cursada.ultimaModificacionEpochMillis ?: Long.MIN_VALUE
-                    ultimaActualizacion > ultimaVista
+    fun openCursada(cursada: CursadaInfo) {
+        selected = cursada
+        selectedMateriaForRestoration = cursada.materia.cursadaMateriaKey()
+        notificationOpenError = null
+    }
+
+    fun cancelPendingNotification() {
+        pendingTarget = null
+        notificationTargetForRestoration = null
+        confirmedTargetRequestId = null
+    }
+
+    suspend fun refresh(forceRefresh: Boolean = false): Boolean {
+        return cursadasState.refresh(
+            forceRefresh = forceRefresh,
+            onRefreshStart = {
+                if (pendingTarget == null) {
+                    notificationOpenError = null
                 }
-                .map { it.materia }
-                .toSet()
-        } catch (e: Exception) {
-            error = errorMessageFor(e)
-        } finally {
-            loading = false
+            },
+        )
+    }
+
+    suspend fun refreshPendingTarget() {
+        val target = pendingTarget
+        val requestId = targetRequestId
+        val refreshSucceeded = refresh(forceRefresh = true)
+        if (
+            refreshSucceeded &&
+            target != null &&
+            pendingTarget == target &&
+            targetRequestId == requestId
+        ) {
+            confirmedTargetRequestId = requestId
         }
     }
 
-    LaunchedEffect(loading, cursadasConNovedades, selected) {
-        if (selected != null) {
-            val cursada = selected ?: return@LaunchedEffect
-            val shareText = buildShareText(cursada)
+    LaunchedEffect(
+        cursadasState.loading,
+        cursadasState.cursadasConNovedades,
+        selected,
+    ) {
+        val selectedCursada = selected
+        if (selectedCursada != null) {
             onHeaderActionsChange(
-                listOf(
-                    HeaderAction(
-                        icon = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Volver",
-                        onClick = { selected = null }
-                    ),
-                    HeaderAction(
-                        icon = Icons.Default.ContentCopy,
-                        contentDescription = "Copiar cursada",
-                        onClick = {
-                            val clipboard =
-                                context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("Cursada", shareText))
-                            Toast.makeText(
-                                context,
-                                "Copiado al portapapeles",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    ),
-                    HeaderAction(
-                        icon = Icons.Default.Share,
-                        contentDescription = "Compartir cursada",
-                        onClick = {
-                            val intent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, shareText)
-                            }
-                            context.startActivity(Intent.createChooser(intent, "Compartir cursada"))
-                        }
-                    )
+                cursadaDetailHeaderActions(
+                    context = context,
+                    cursada = selectedCursada,
+                    onBack = ::closeSelectedCursada,
                 )
             )
         } else {
             onHeaderActionsChange(
-                listOf(
-                    HeaderAction(
-                        icon = Icons.Default.DoneAll,
-                        contentDescription = "Marcar todas las cursadas como vistas",
-                        enabled = !loading && cursadasConNovedades.isNotEmpty(),
-                        onClick = {
-                            cursadasConNovedades = emptySet()
-                            scope.launch(Dispatchers.IO) {
-                                CursadasStore.markAllAsSeen(context, cursadas)
+                cursadasListHeaderActions(
+                    loading = cursadasState.loading,
+                    hasUnseenCursadas = cursadasState.cursadasConNovedades.isNotEmpty(),
+                    onMarkAllAsSeen = {
+                        scope.launch { cursadasState.markAllAsSeen() }
+                    },
+                    onRefresh = {
+                        scope.launch {
+                            if (pendingTarget != null) {
+                                refreshPendingTarget()
+                            } else {
+                                refresh(forceRefresh = true)
                             }
                         }
-                    ),
-                    HeaderAction(
-                        icon = Icons.Default.Refresh,
-                        contentDescription = "Refrescar cursadas",
-                        enabled = !loading,
-                        onClick = { scope.launch { refresh() } }
-                    )
+                    },
                 )
             )
         }
@@ -191,272 +151,166 @@ fun CursadasScreen(
         }
     }
 
-    LaunchedEffect(initialSelected) {
-        if (initialSelected == null) {
-            consumedInitialSelection = null
-        }
-    }
-
     LaunchedEffect(initialTarget) {
         if (initialTarget != null) {
+            selected = null
+            selectedMateriaForRestoration = null
             pendingTarget = initialTarget
+            notificationTargetForRestoration = initialTarget
+            targetRequestId += 1
+            confirmedTargetRequestId = null
+            notificationOpenError = null
             onInitialTargetConsumed()
         }
     }
 
-    LaunchedEffect(initialSelected, cursadas, initialLoadCompleted) {
-        val pendingSelection = initialSelected ?: return@LaunchedEffect
-        if (consumedInitialSelection == pendingSelection) {
-            return@LaunchedEffect
+    LaunchedEffect(notificationOpenEventId, activeNotificationKind) {
+        if (
+            shouldInvalidatePendingNotification(
+                eventId = notificationOpenEventId,
+                activeKind = activeNotificationKind,
+                screenKind = NotificationOpenKind.CURSADA,
+            )
+        ) {
+            cancelPendingNotification()
+            notificationOpenError = null
         }
-        val matchingCursada = cursadas.firstOrNull { it.materia == pendingSelection.materia }
-
-        if (matchingCursada == null && !initialLoadCompleted) {
-            return@LaunchedEffect
-        }
-
-        consumedInitialSelection = pendingSelection
-        val cursadaToOpen = matchingCursada ?: pendingSelection
-        cursadasConNovedades = cursadasConNovedades - cursadaToOpen.materia
-        withContext(Dispatchers.IO) {
-            CursadasStore.markAsSeen(context, cursadaToOpen)
-        }
-        selected = cursadaToOpen
-        onInitialSelectedConsumed()
     }
 
-    LaunchedEffect(pendingTarget, cursadas) {
-        val target = pendingTarget ?: return@LaunchedEffect
-        val matchingCursada = cursadas.firstOrNull { cursada ->
-            cursada.materia.trim().equals(target.materia.trim(), ignoreCase = true) &&
-                (target.fechaModificacion.isBlank() ||
-                    cursada.ultimaModificacion == target.fechaModificacion)
-        } ?: return@LaunchedEffect
-        cursadasConNovedades = cursadasConNovedades - matchingCursada.materia
-        withContext(Dispatchers.IO) {
-            CursadasStore.markAsSeen(context, matchingCursada)
+    LaunchedEffect(notificationTargetForRestoration, selected, pendingTarget) {
+        val target = notificationTargetForRestoration ?: return@LaunchedEffect
+        if (
+            shouldRestoreNotificationResolution(
+                hasSelectedContent = selected != null,
+                hasPendingTarget = pendingTarget != null,
+                hasRestorableTarget = true,
+            )
+        ) {
+            pendingTarget = target
+            targetRequestId += 1
+            confirmedTargetRequestId = null
+            notificationOpenError = null
         }
-        selected = matchingCursada
+    }
+
+    LaunchedEffect(
+        pendingTarget,
+        cursadasState.initialLoadCompleted,
+        targetRequestId,
+    ) {
+        if (pendingTarget != null && cursadasState.initialLoadCompleted) {
+            refreshPendingTarget()
+        }
+    }
+
+    LaunchedEffect(
+        cursadasState.cursadas,
+        selectedMateriaForRestoration,
+        cursadasState.initialLoadCompleted,
+    ) {
+        val materia = selectedMateriaForRestoration ?: return@LaunchedEffect
+        val materiaKey = materia.cursadaMateriaKey()
+        val restored = cursadasState.cursadas.firstOrNull { cursada ->
+            cursada.materia.cursadaMateriaKey() == materiaKey
+        }
+        if (restored != null) {
+            if (selected != restored) {
+                selected = restored
+            }
+            pendingTarget = null
+            confirmedTargetRequestId = null
+            notificationOpenError = null
+        } else if (cursadasState.initialLoadCompleted) {
+            selected = null
+            selectedMateriaForRestoration = null
+        }
+    }
+
+    LaunchedEffect(
+        pendingTarget,
+        cursadasState.cursadas,
+        targetRequestId,
+        confirmedTargetRequestId,
+        cursadasState.loading,
+    ) {
+        val target = pendingTarget ?: return@LaunchedEffect
+        val matchingCursada = findCursadaForNotification(cursadasState.cursadas, target)
+        val targetRefreshConfirmed = isCursadaTargetResolutionConfirmed(
+            targetRequestId = targetRequestId,
+            confirmedTargetRequestId = confirmedTargetRequestId,
+            loading = cursadasState.loading,
+        )
+        if (!targetRefreshConfirmed) return@LaunchedEffect
+        if (matchingCursada == null) {
+            notificationOpenError = "La cursada de la notificación ya no está disponible."
+            cancelPendingNotification()
+            return@LaunchedEffect
+        }
+        cursadasState.markAsSeen(matchingCursada)
+        openCursada(matchingCursada)
         pendingTarget = null
+        confirmedTargetRequestId = null
+        notificationOpenError = null
     }
 
     LaunchedEffect(Unit) {
-        // El backend Firebase ya es la única fuente de notificaciones del sistema.
-        // Esta pantalla solo refresca el snapshot local para mostrar contenido y badges.
-        refresh()
-        initialLoadCompleted = true
+        cursadasState.loadCachedSnapshot()
+        val hasNotificationTarget = pendingTarget != null
+        if (!hasNotificationTarget) {
+            refresh()
+        }
+        cursadasState.completeInitialLoad()
     }
 
-    if (selected != null) {
-        CursadaDetailScreen(cursada = selected!!, onBack = {
-            selected = null
-        })
+    LaunchedEffect(filter) {
+        if (listFilter != filter) {
+            if (listState.layoutInfo.totalItemsCount > 0) {
+                listState.scrollToItem(0)
+            }
+            listFilter = filter
+        }
+    }
+
+    val selectedCursada = selected
+    if (selectedCursada != null) {
+        CursadaDetailScreen(
+            cursada = selectedCursada,
+            onBack = ::closeSelectedCursada,
+            statusMessage = cursadasState.actionError ?: cursadasState.warning,
+            statusIsError = cursadasState.actionError != null,
+        )
         return
     }
 
-    LaunchedEffect(cursadas, filter) {
-        listState.scrollToItem(0)
-    }
-
-    val filtered = remember(cursadas, filter) {
-        val query = filter.trim().lowercase()
-        val matchingCursadas = if (query.isBlank()) cursadas
-        else cursadas.filter { it.materia.lowercase().contains(query) }
-
-        matchingCursadas.sortedWith(
-            compareByDescending<CursadaInfo> {
-                it.ultimaModificacionEpochMillis ?: Long.MIN_VALUE
-            }.thenBy { it.materia.lowercase() }
+    val showNotificationOpeningState = cursadasState.loading && pendingTarget != null
+    if (showNotificationOpeningState) {
+        NotificationOpeningState(
+            openingKey = notificationOpenEventId to pendingTarget,
+            onCancel = ::cancelPendingNotification,
         )
+        return
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-
-        OutlinedTextField(
-            value = filter,
-            onValueChange = { filter = it },
-            label = { Text("Filtrar por nombre de materia") },
-            trailingIcon = {
-                if (filter.isNotBlank()) {
-                    IconButton(onClick = { filter = "" }) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Limpiar filtro"
-                        )
-                    }
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        if (loading) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                CircularProgressIndicator()
-            }
-            Spacer(Modifier.height(8.dp))
-        }
-
-        if (error != null) {
-            Text(error.orEmpty(), color = MaterialTheme.colorScheme.error)
-            Spacer(Modifier.height(8.dp))
-        }
-
-        LazyColumn(
-            state = listState,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(filtered, key = { it.materia }) { cursada ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            cursadasConNovedades = cursadasConNovedades - cursada.materia
-                            scope.launch(Dispatchers.IO) {
-                                CursadasStore.markAsSeen(context, cursada)
-                            }
-                            selected = cursada
-                        }
-                ) {
-                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.Top
-                        ) {
-                            Text(
-                                text = cursada.materia,
-                                style = MaterialTheme.typography.titleMedium,
-                                maxLines = 4,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(end = 8.dp)
-                            )
-                            if (cursada.materia in cursadasConNovedades) {
-                                Text(
-                                    text = "Nuevo",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                        Text(
-                            text = "Última actualización: ${cursada.ultimaModificacion.ifBlank { "Sin fecha" }}",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-private fun errorMessageFor(error: Throwable): String {
-    return when (error) {
-        is IOException -> "Hubo un error al obtener las cursadas (${error.localizedMessage ?: "Error de red"})."
-        else -> "Hubo un error al obtener las cursadas."
-    }
-}
-
-@Composable
-private fun CursadaDetailScreen(cursada: CursadaInfo, onBack: () -> Unit) {
-    BackHandler(onBack = onBack)
-    val context = LocalContext.current
-    val textColor = MaterialTheme.colorScheme.onSurface.toArgb()
-    val linkColor = MaterialTheme.colorScheme.primary.toArgb()
-    val detailScrollState = rememberScrollState()
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        Text(cursada.materia, style = MaterialTheme.typography.headlineSmall)
-        Spacer(Modifier.height(4.dp))
-        Text(
-            "Última actualización: ${cursada.ultimaModificacion.ifBlank { "Sin fecha" }}",
-            style = MaterialTheme.typography.bodySmall
-        )
-        Spacer(Modifier.height(12.dp))
-
-        Box(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(detailScrollState)
-                    .padding(bottom = 36.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text("Inicio de cursada", style = MaterialTheme.typography.titleMedium)
-                HtmlBlock(
-                    html = cursada.inicioCursadaHtml,
-                    textColor = textColor,
-                    linkColor = linkColor,
-                    context = context
-                )
-                HorizontalDivider()
-                Text("Horarios de cursada", style = MaterialTheme.typography.titleMedium)
-                HtmlBlock(
-                    html = cursada.horariosCursadaHtml,
-                    textColor = textColor,
-                    linkColor = linkColor,
-                    context = context
-                )
-            }
-
-            ScrollMoreHint(
-                scrollState = detailScrollState,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 8.dp)
-            )
-        }
-    }
-}
-
-private fun buildShareText(cursada: CursadaInfo): String {
-    val inicioCursadaPlano = htmlToShareText(cursada.inicioCursadaHtml)
-    val horariosCursadaPlano = htmlToShareText(cursada.horariosCursadaHtml)
-
-    return buildString {
-        appendLine(cursada.materia)
-        appendLine("Última actualización: ${cursada.ultimaModificacion.ifBlank { "Sin fecha" }}")
-        appendLine()
-        appendLine("Inicio de cursada")
-        appendLine(inicioCursadaPlano.ifBlank { "Sin información" })
-        appendLine()
-        appendLine("Horarios de cursada")
-        append(horariosCursadaPlano.ifBlank { "Sin información" })
-    }
-}
-
-@Composable
-private fun HtmlBlock(html: String, textColor: Int, linkColor: Int, context: Context) {
-    AndroidView(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface, MaterialTheme.shapes.medium)
-            .padding(12.dp),
-        factory = {
-            TextView(context).apply {
-                setTextIsSelectable(true)
-                movementMethod = LinkMovementMethod.getInstance()
-            }
+    CursadasScreenContent(
+        state = CursadasScreenContentState(
+            cursadas = cursadasState.cursadas,
+            cursadasConNovedades = cursadasState.cursadasConNovedades,
+            loading = cursadasState.loading,
+            hasResolvedSnapshot = cursadasState.hasResolvedSnapshot,
+            initialLoadCompleted = cursadasState.initialLoadCompleted,
+            loadError = cursadasState.loadError,
+            notificationOpenError = notificationOpenError,
+            actionError = cursadasState.actionError,
+            warning = cursadasState.warning,
+        ),
+        filter = filter,
+        listState = listState,
+        onFilterChange = { filter = it },
+        onCursadaClick = { cursada ->
+            cancelPendingNotification()
+            notificationOpenError = null
+            scope.launch { cursadasState.markAsSeen(cursada) }
+            openCursada(cursada)
         },
-        update = { tv ->
-            tv.setTextColor(textColor)
-            tv.setLinkTextColor(linkColor)
-            tv.text = parseHtmlWithoutTextColors(
-                html.ifBlank { "<p>Sin información</p>" }
-            )
-        }
     )
 }

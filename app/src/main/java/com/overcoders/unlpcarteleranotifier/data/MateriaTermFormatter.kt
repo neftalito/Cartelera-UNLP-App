@@ -1,3 +1,4 @@
+/** Normaliza nombres de períodos académicos para mostrarlos de forma amigable. */
 package com.overcoders.unlpcarteleranotifier.data
 
 import com.overcoders.unlpcarteleranotifier.model.MateriaCatalogItem

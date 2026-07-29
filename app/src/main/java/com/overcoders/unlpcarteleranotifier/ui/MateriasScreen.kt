@@ -1,110 +1,53 @@
+/**
+ * Presenta la cartelera de anuncios, su catálogo de materias y la apertura de notificaciones.
+ */
 package com.overcoders.unlpcarteleranotifier.ui
 
-import android.annotation.SuppressLint
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.content.Intent
-import android.text.method.LinkMovementMethod
-import android.widget.TextView
-import android.widget.Toast
-import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.Stable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.toArgb
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.net.toUri
-import androidx.core.text.HtmlCompat
-import com.overcoders.unlpcarteleranotifier.BuildConfig
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.overcoders.unlpcarteleranotifier.HeaderAction
-import com.overcoders.unlpcarteleranotifier.data.AnunciosService
-import com.overcoders.unlpcarteleranotifier.data.ApiException
-import com.overcoders.unlpcarteleranotifier.data.MateriasService
-import com.overcoders.unlpcarteleranotifier.data.MateriasStore
+import com.overcoders.unlpcarteleranotifier.shouldInvalidatePendingNotification
+import com.overcoders.unlpcarteleranotifier.shouldRestoreNotificationResolution
+import com.overcoders.unlpcarteleranotifier.data.MateriasRepository
 import com.overcoders.unlpcarteleranotifier.data.SettingsStore
 import com.overcoders.unlpcarteleranotifier.model.CarteleraNotificationTarget
-import com.overcoders.unlpcarteleranotifier.model.MateriaCatalogItem
 import com.overcoders.unlpcarteleranotifier.model.Mensaje
+import com.overcoders.unlpcarteleranotifier.model.toMateriaCatalogIdOrNull
+import com.overcoders.unlpcarteleranotifier.push.NotificationOpenKind
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.AnuncioDetailScreen
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.CarteleraTargetRefreshState
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.DEFAULT_NOTIFICATION_SEARCH_PAGE_LIMIT
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.MateriasScreenContent
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.MateriasScreenContentState
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.NotificationSearchDecision
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.anuncioSaveableKey
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.announcementDetailHeaderActions
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.announcementsRefreshHeaderActions
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.canResolveCarteleraTargetFromCurrentAnnouncements
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.findAnuncioForNotification
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.localSelectionRestoration
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.notificationSearchDecision
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.notificationTargetFilterId
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.rememberMateriasFeedState
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.rememberMateriasFilterState
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.toLocalRestorationTarget
+import com.overcoders.unlpcarteleranotifier.ui.common.cachedContentWarning
+import com.overcoders.unlpcarteleranotifier.ui.common.userFacingError
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.IOException
-
-@Stable
-private class MateriasFilterState(
-    expanded: Boolean = false,
-    query: String = "",
-    selected: MateriaCatalogItem? = null
-) {
-    var expanded by mutableStateOf(expanded)
-    var query by mutableStateOf(query)
-    var selected by mutableStateOf(selected)
-}
-
-@Composable
-private fun rememberMateriasFilterState(): MateriasFilterState {
-    return remember { MateriasFilterState() }
-}
 
 /**
  * Pantalla principal de anuncios.
@@ -112,176 +55,99 @@ private fun rememberMateriasFilterState(): MateriasFilterState {
  * Combina feed global o filtrado por materia, paginación incremental y el detalle
  * del anuncio seleccionado, incluyendo acciones para compartir o copiar contenido.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MateriasScreen(
-    initialSelected: Mensaje? = null,
     initialTarget: CarteleraNotificationTarget? = null,
-    onInitialSelectedConsumed: () -> Unit = {},
+    notificationOpenEventId: Long = 0L,
+    activeNotificationKind: NotificationOpenKind? = null,
     onInitialTargetConsumed: () -> Unit = {},
     onTitleChange: (String?) -> Unit = {},
     onFullscreenDetailChange: (Boolean) -> Unit = {},
     onHeaderActionsChange: (List<HeaderAction>) -> Unit = {}
 ) {
     val context = LocalContext.current
-    val focusManager = LocalFocusManager.current
-    val keyboardController = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
-    val anunciosService = remember { AnunciosService() }
-    val materiasService = remember { MateriasService() }
-    val hideCancelledMessages by SettingsStore.hideCancelledMateriasMessagesFlow(context)
-        .collectAsState(initial = false)
+    val materiasFilterState = rememberMateriasFilterState()
+    val initialFilterKey = materiasFilterState.selected?.id
+        ?.toMateriaCatalogIdOrNull()
+        ?.toString()
+        ?: "__all__"
+    val feedState = rememberMateriasFeedState(initialFilterKey)
+    val materiasRepository = remember(context) { MateriasRepository.get(context) }
+    val hideCancelledMessagesFlow = remember(context) {
+        SettingsStore.hideCancelledMateriasMessagesFlow(context)
+    }
+    val hideCancelledMessages by hideCancelledMessagesFlow
+        .collectAsStateWithLifecycle(initialValue = false)
 
-    val pageSize = 10
-
-    var loadingInitial by remember { mutableStateOf(false) }
-    var loadingMore by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-
-    var offset by remember { mutableIntStateOf(0) }
-    var anuncios by remember { mutableStateOf<List<Mensaje>>(emptyList()) }
-    var newCount by remember { mutableIntStateOf(0) }
-    var lastSeenTotal by remember { mutableStateOf<Int?>(null) }
+    val pageSize = feedState.pageSize
+    val loadingInitial = feedState.loadingInitial
+    val loadingMore = feedState.loadingMore
+    val error = feedState.error
+    val warning = feedState.warning
+    val offset = feedState.offset
+    val paginationRestorationFilterKey = feedState.paginationRestorationFilterKey
+    val paginationRestorationTargetOffset = feedState.paginationRestorationTargetOffset
+    val listPositionRestorationPending = feedState.listPositionRestorationPending
+    val anuncios = feedState.anuncios
+    val loadedFilterKey = feedState.loadedFilterKey
+    val hasMore = feedState.hasMore
 
     var selected by remember { mutableStateOf<Mensaje?>(null) }
-    var pendingTarget by remember { mutableStateOf<CarteleraNotificationTarget?>(null) }
-    var materias by remember { mutableStateOf<List<MateriaCatalogItem>>(emptyList()) }
-    @Suppress("VariableNeverRead") var materiasError by remember { mutableStateOf<String?>(null) }
+    var selectedAnnouncementKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingTarget by rememberSaveable { mutableStateOf(initialTarget) }
+    var notificationTargetForRestoration by rememberSaveable {
+        mutableStateOf(initialTarget)
+    }
+    var notificationOpenError by remember { mutableStateOf<String?>(null) }
+    var notificationAutoPagesLoaded by remember { mutableIntStateOf(0) }
+    var notificationGlobalFallbackAttempted by rememberSaveable { mutableStateOf(false) }
+    var notificationRefreshState by remember {
+        mutableStateOf(CarteleraTargetRefreshState.REQUIRED)
+    }
+    val materias by materiasRepository.items.collectAsStateWithLifecycle()
+    var materiasError by remember { mutableStateOf<String?>(null) }
+    var materiasWarning by remember { mutableStateOf<String?>(null) }
     var materiasLoading by remember { mutableStateOf(false) }
 
-    // El endpoint puede repetir elementos entre recargas o cambios de paginado. Mantener una
-    // clave estable evita tarjetas duplicadas cuando acumulamos páginas en memoria.
-    val seenKeys = remember { mutableStateListOf<String>() }
-    fun keyOf(m: Mensaje): String = "${m.materia}||${m.titulo}||${m.fecha}||${m.autor}"
-
-    val materiasFilterState = rememberMateriasFilterState()
-
-    val materiasFiltradas = remember(materias, materiasFilterState.query) {
-        val query = materiasFilterState.query.trim().lowercase()
-        if (query.isBlank()) materias
-        else materias.filter { it.nombre.lowercase().contains(query) }
+    fun openAnnouncement(
+        anuncio: Mensaje,
+        restorationTarget: CarteleraNotificationTarget,
+    ) {
+        selected = anuncio
+        selectedAnnouncementKey = anuncio.anuncioSaveableKey()
+        notificationTargetForRestoration = restorationTarget
+        notificationOpenError = null
     }
 
-    suspend fun loadPage(reset: Boolean) {
-        error = null
-        if (reset) {
-            // Un reset representa un nuevo snapshot del feed: limpiamos la lista acumulada y
-            // recalculamos contadores sólo cuando estamos en el feed global.
-            loadingInitial = true
-            loadingMore = false
-            offset = 0
-            anuncios = emptyList()
-            seenKeys.clear()
-            if (materiasFilterState.selected == null) {
-                lastSeenTotal = SettingsStore.getLastSeenTotal(context)
-            } else {
-                newCount = 0
-            }
-        } else {
-            loadingMore = true
-        }
-
-        try {
-            val materiaId = materiasFilterState.selected?.id?.toIntOrNull()
-            val startOffset = offset
-            val page = withContext(Dispatchers.IO) {
-                anunciosService.fetch(
-                    desde = startOffset,
-                    cantidad = pageSize,
-                    idMateria = materiaId
-                )
-            }
-
-            // Dedupe defensivo: el backend no garantiza que cada página sea perfectamente
-            // disjunta respecto de la anterior o de una recarga manual.
-            val newOnes = page.mensajes.filter { m ->
-                val k = keyOf(m)
-                if (seenKeys.contains(k)) false else {
-                    seenKeys.add(k); true
-                }
-            }
-
-            anuncios = anuncios + newOnes
-            // El contador de novedades se apoya en el total global visto por última vez; no
-            // aplica cuando el usuario está filtrando por una materia puntual.
-            if (reset && materiasFilterState.selected == null) {
-                val storedTotal = lastSeenTotal ?: -1
-                val diff = if (storedTotal < 0) 0 else (page.total - storedTotal).coerceAtLeast(0)
-                newCount = if (storedTotal < 0) 0 else diff
-                if (newCount > 0) {
-                    Toast.makeText(
-                        context,
-                        "Hay $newCount anuncios nuevos",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-                SettingsStore.setLastSeenTotal(context, page.total)
-                lastSeenTotal = page.total
-            }
-            offset = startOffset + pageSize
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            error = errorMessageFor(e)
-        } finally {
-            loadingInitial = false
-            loadingMore = false
-        }
+    fun closeSelectedAnnouncement() {
+        selected = null
+        selectedAnnouncementKey = null
+        notificationTargetForRestoration = null
     }
 
-    LaunchedEffect(loadingInitial, loadingMore, selected) {
-        if (selected != null) {
-            val anuncio = selected ?: return@LaunchedEffect
-            val shareText = buildShareText(anuncio)
-            onHeaderActionsChange(
-                listOf(
-                    HeaderAction(
-                        icon = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Volver",
-                        onClick = { selected = null }
-                    ),
-                    HeaderAction(
-                        icon = Icons.Default.ContentCopy,
-                        contentDescription = "Copiar anuncio",
-                        onClick = {
-                            val clipboard =
-                                context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("Anuncio", shareText))
-                            Toast.makeText(
-                                context,
-                                "Copiado al portapapeles",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    ),
-                    HeaderAction(
-                        icon = Icons.Default.Share,
-                        contentDescription = "Compartir anuncio",
-                        onClick = {
-                            val intent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, shareText)
-                            }
-                            context.startActivity(Intent.createChooser(intent, "Compartir anuncio"))
-                        }
-                    )
-                )
-            )
-        } else {
-            onHeaderActionsChange(
-                listOf(
-                    HeaderAction(
-                        icon = Icons.Default.Refresh,
-                        contentDescription = "Refrescar anuncios",
-                        enabled = !loadingInitial && !loadingMore,
-                        onClick = { scope.launch { loadPage(reset = true) } }
-                    )
-                )
-            )
-        }
+    fun cancelPendingNotification() {
+        selected = null
+        selectedAnnouncementKey = null
+        pendingTarget = null
+        notificationTargetForRestoration = null
+        notificationAutoPagesLoaded = 0
+        notificationGlobalFallbackAttempted = false
+        notificationRefreshState = CarteleraTargetRefreshState.REQUIRED
     }
 
+    suspend fun loadPage(reset: Boolean, forceRefresh: Boolean = false) {
+        feedState.loadPage(
+            reset = reset,
+            forceRefresh = forceRefresh,
+            currentMateriaId = {
+                materiasFilterState.selected?.id?.toMateriaCatalogIdOrNull()
+            },
+            hasPendingNotification = pendingTarget != null,
+            onClearNotificationOpenError = { notificationOpenError = null },
+        )
+    }
     LaunchedEffect(selected) {
         onFullscreenDetailChange(selected != null)
         onTitleChange(if (selected != null) "Anuncio" else null)
@@ -295,66 +161,407 @@ fun MateriasScreen(
         }
     }
 
-    LaunchedEffect(initialSelected) {
-        if (initialSelected != null) {
-            selected = initialSelected
-            onInitialSelectedConsumed()
+    LaunchedEffect(anuncios, selectedAnnouncementKey) {
+        val keyToRestore = selectedAnnouncementKey ?: return@LaunchedEffect
+        if (selected?.anuncioSaveableKey() != keyToRestore) {
+            anuncios.firstOrNull { it.anuncioSaveableKey() == keyToRestore }?.let { match ->
+                selected = match
+                if (
+                    pendingTarget?.localSelectionRestoration()?.announcementKey == keyToRestore
+                ) {
+                    pendingTarget = null
+                    notificationOpenError = null
+                    notificationAutoPagesLoaded = 0
+                    notificationGlobalFallbackAttempted = false
+                    notificationRefreshState = CarteleraTargetRefreshState.REQUIRED
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(materias, materiasFilterState.selected?.id) {
+        val selectedId = materiasFilterState.selected?.id ?: return@LaunchedEffect
+        materias.firstOrNull { it.id == selectedId }?.let(
+            materiasFilterState::reconcileSelection
+        )
+    }
+
+    LaunchedEffect(notificationOpenEventId, activeNotificationKind) {
+        if (
+            shouldInvalidatePendingNotification(
+                eventId = notificationOpenEventId,
+                activeKind = activeNotificationKind,
+                screenKind = NotificationOpenKind.CARTELERA,
+            )
+        ) {
+            cancelPendingNotification()
+            notificationOpenError = null
+        }
+    }
+
+    suspend fun refreshPendingNotificationTarget() {
+        val target = pendingTarget ?: return
+        notificationRefreshState = CarteleraTargetRefreshState.IN_PROGRESS
+        loadPage(
+            reset = true,
+            // Una selección local restaurada debe poder resolverse desde el snapshot persistido.
+            // Los destinos externos sí exigen una consulta actual para evitar abrir datos obsoletos.
+            forceRefresh = target.localSelectionRestoration() == null,
+        )
+        if (pendingTarget == target) {
+            notificationRefreshState = CarteleraTargetRefreshState.COMPLETED
         }
     }
 
     LaunchedEffect(initialTarget) {
         if (initialTarget != null) {
+            selected = null
+            selectedAnnouncementKey = null
             pendingTarget = initialTarget
+            notificationTargetForRestoration = initialTarget
+            notificationOpenError = null
+            feedState.clearFeedback()
+            notificationAutoPagesLoaded = 0
+            notificationGlobalFallbackAttempted = false
+            notificationRefreshState = CarteleraTargetRefreshState.REQUIRED
             onInitialTargetConsumed()
         }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(notificationTargetForRestoration, selected, pendingTarget) {
+        val target = notificationTargetForRestoration ?: return@LaunchedEffect
+        if (
+            shouldRestoreNotificationResolution(
+                hasSelectedContent = selected != null,
+                hasPendingTarget = pendingTarget != null,
+                hasRestorableTarget = true,
+            )
+        ) {
+            pendingTarget = target
+            notificationOpenError = null
+            feedState.clearFeedback()
+            notificationAutoPagesLoaded = 0
+            notificationGlobalFallbackAttempted = false
+            notificationRefreshState = CarteleraTargetRefreshState.REQUIRED
+        }
+    }
+
+    suspend fun loadMateriasCatalog(forceRefresh: Boolean = false) {
         materiasLoading = true
+        materiasError = null
+        materiasWarning = null
         try {
-            val cached = withContext(Dispatchers.IO) { MateriasStore.load(context) }
-            materias = cached
-            if (cached.isEmpty()) {
-                val fetched = withContext(Dispatchers.IO) { materiasService.refresh(context) }
-                if (fetched.isNotEmpty()) {
-                    materias = fetched
-                }
+            val result = materiasRepository.load(forceRefresh)
+            val failure = result.refreshFailure
+            if (failure != null && result.items.isNotEmpty()) {
+                materiasWarning = cachedContentWarning(
+                    operation = "actualizar el catálogo de materias",
+                    error = failure,
+                )
+            } else if (failure != null) {
+                materiasError = userFacingError(
+                    operation = "cargar el catálogo de materias",
+                    error = failure,
+                )
             }
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
-            @Suppress("AssignedValueIsNeverRead")
-            materiasError = e.message
         } finally {
             materiasLoading = false
         }
     }
 
-    LaunchedEffect(pendingTarget?.materiaId, materias) {
+    val headerRetriesNotification = pendingTarget != null && (error != null || warning != null)
+    val headerRefreshesCatalog = pendingTarget == null &&
+        error == null &&
+        notificationOpenError == null &&
+        (materiasError != null || (warning == null && materiasWarning != null))
+
+    LaunchedEffect(
+        loadingInitial,
+        loadingMore,
+        materiasLoading,
+        selected,
+        pendingTarget,
+        headerRetriesNotification,
+        headerRefreshesCatalog,
+    ) {
+        if (selected != null) {
+            val anuncio = selected ?: return@LaunchedEffect
+            onHeaderActionsChange(
+                announcementDetailHeaderActions(
+                    context = context,
+                    announcement = anuncio,
+                    onBack = ::closeSelectedAnnouncement,
+                )
+            )
+        } else {
+            val refreshEnabled = when {
+                pendingTarget != null -> headerRetriesNotification &&
+                    !loadingInitial &&
+                    !loadingMore
+                headerRefreshesCatalog -> !materiasLoading
+                else -> !loadingInitial && !loadingMore
+            }
+            onHeaderActionsChange(
+                announcementsRefreshHeaderActions(
+                    refreshesCatalog = headerRefreshesCatalog,
+                    enabled = refreshEnabled,
+                    onRefresh = {
+                        when {
+                            headerRetriesNotification -> scope.launch {
+                                feedState.clearFeedback()
+                                notificationAutoPagesLoaded = 0
+                                loadPage(reset = true, forceRefresh = true)
+                            }
+                            headerRefreshesCatalog -> scope.launch {
+                                loadMateriasCatalog(forceRefresh = true)
+                            }
+                            else -> scope.launch {
+                                loadPage(reset = true, forceRefresh = true)
+                            }
+                        }
+                    },
+                )
+            )
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        loadMateriasCatalog()
+    }
+
+    LaunchedEffect(
+        pendingTarget?.materiaId,
+        notificationGlobalFallbackAttempted,
+        materias,
+        materiasLoading,
+    ) {
         val target = pendingTarget ?: return@LaunchedEffect
-        val materiaId = target.materiaId ?: return@LaunchedEffect
-        if (materias.isEmpty() || materiasFilterState.selected?.id == materiaId) {
+        val materiaId = target.materiaId
+        if (materiasLoading) {
             return@LaunchedEffect
         }
-        val materia = materias.firstOrNull { it.id == materiaId } ?: return@LaunchedEffect
-        materiasFilterState.selected = materia
-        materiasFilterState.query = materia.nombre
+        val desiredMateriaId = notificationTargetFilterId(
+            targetMateriaId = materiaId,
+            availableMateriaIds = materias.mapTo(mutableSetOf()) { it.id },
+            useGlobalFallback = notificationGlobalFallbackAttempted,
+        )
+        if (materiasFilterState.selected?.id == desiredMateriaId) return@LaunchedEffect
+        val materia = materias.firstOrNull { it.id == desiredMateriaId }
+        if (materia != null) {
+            materiasFilterState.select(materia)
+        } else {
+            // El fallback y los ids desconocidos se resuelven únicamente en el feed global.
+            materiasFilterState.clearSelection()
+        }
     }
 
     LaunchedEffect(materiasFilterState.selected?.id) {
-        loadPage(reset = true)
+        val selectedFilterKey = materiasFilterState.selected?.id?.toMateriaCatalogIdOrNull()?.toString()
+            ?: "__all__"
+        if (paginationRestorationFilterKey != selectedFilterKey) {
+            listState.scrollToItem(0)
+        }
+        if (pendingTarget != null) {
+            refreshPendingNotificationTarget()
+        } else {
+            loadPage(reset = true)
+        }
     }
 
-    LaunchedEffect(pendingTarget, anuncios) {
+    LaunchedEffect(listState, listPositionRestorationPending) {
+        snapshotFlow {
+            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+        }.collect { (index, scrollOffset) ->
+            feedState.recordListPosition(index = index, scrollOffset = scrollOffset)
+        }
+    }
+
+    val activeFilterKey = materiasFilterState.selected?.id?.toMateriaCatalogIdOrNull()?.toString()
+        ?: "__all__"
+    val canContinueListRestoration = listPositionRestorationPending &&
+        paginationRestorationFilterKey == activeFilterKey &&
+        loadedFilterKey == activeFilterKey &&
+        offset < paginationRestorationTargetOffset &&
+        hasMore &&
+        pendingTarget == null &&
+        selected == null &&
+        !loadingInitial &&
+        !loadingMore &&
+        error == null &&
+        warning == null
+
+    LaunchedEffect(
+        canContinueListRestoration,
+        listPositionRestorationPending,
+        offset,
+        paginationRestorationTargetOffset,
+        hasMore,
+        loadedFilterKey,
+        activeFilterKey,
+        loadingInitial,
+        loadingMore,
+        error,
+        warning,
+        pendingTarget,
+        selected,
+        hideCancelledMessages,
+    ) {
+        if (canContinueListRestoration) {
+            loadPage(reset = false)
+            return@LaunchedEffect
+        }
+
+        val restorationReachedEnd = offset >= paginationRestorationTargetOffset || !hasMore
+        if (
+            listPositionRestorationPending &&
+            restorationReachedEnd &&
+            loadedFilterKey == activeFilterKey &&
+            pendingTarget == null &&
+            selected == null &&
+            !loadingInitial &&
+            !loadingMore &&
+            error == null &&
+            warning == null
+        ) {
+            if (!hasMore) {
+                feedState.clampRestorationTargetToLoadedOffset()
+            }
+            val visibleItemCount = if (hideCancelledMessages) {
+                anuncios.count { !it.isAnulado }
+            } else {
+                anuncios.size
+            }
+            val restoredPosition = feedState.restoredListPosition(visibleItemCount)
+            listState.scrollToItem(
+                index = restoredPosition.index,
+                scrollOffset = restoredPosition.scrollOffset,
+            )
+            feedState.completeListPositionRestoration()
+        }
+    }
+
+    LaunchedEffect(
+        pendingTarget,
+        anuncios,
+        loadedFilterKey,
+        hasMore,
+        loadingInitial,
+        loadingMore,
+        materiasLoading,
+        materiasFilterState.selected?.id,
+        materias,
+        notificationRefreshState,
+        notificationGlobalFallbackAttempted,
+    ) {
         val target = pendingTarget ?: return@LaunchedEffect
-        val match = anuncios.firstOrNull { anuncio ->
-            anuncio.titulo == target.titulo &&
-                anuncio.fecha == target.fecha &&
-                anuncio.materia.trim().equals(target.materia.trim(), ignoreCase = true) &&
-                (target.autor.isBlank() || anuncio.autor == target.autor)
-        } ?: return@LaunchedEffect
-        selected = match
-        pendingTarget = null
+        val isLoading = loadingInitial || loadingMore
+
+        val targetMateriaId = target.materiaId
+        val usingGlobalFallback = notificationGlobalFallbackAttempted && targetMateriaId != null
+        val selectedTargetFilter = !usingGlobalFallback && targetMateriaId != null &&
+            materiasFilterState.selected?.id == targetMateriaId
+        val targetMissingFromCatalog = targetMateriaId != null &&
+            !materiasLoading &&
+            materias.none { it.id == targetMateriaId }
+        val canSearchCurrentFilter = when {
+            usingGlobalFallback -> materiasFilterState.selected == null
+            targetMateriaId == null -> true
+            selectedTargetFilter -> true
+            targetMissingFromCatalog -> true
+            else -> false
+        }
+        if (!canSearchCurrentFilter) return@LaunchedEffect
+
+        val expectedFilterKey = if (selectedTargetFilter) targetMateriaId else "__all__"
+        val expectedFilterLoaded = loadedFilterKey == expectedFilterKey
+        if (
+            canResolveCarteleraTargetFromCurrentAnnouncements(
+                isLoading = isLoading,
+                refreshFailed = error != null || warning != null,
+                expectedFilterLoaded = expectedFilterLoaded,
+                targetRefreshCompleted =
+                    notificationRefreshState == CarteleraTargetRefreshState.COMPLETED,
+            )
+        ) {
+            val match = findAnuncioForNotification(anuncios, target)
+            if (match != null) {
+                val absoluteIndex = anuncios.indexOfFirst {
+                    it.anuncioSaveableKey() == match.anuncioSaveableKey()
+                }.coerceAtLeast(0)
+                openAnnouncement(
+                    anuncio = match,
+                    restorationTarget = match.toLocalRestorationTarget(
+                        materiaId = materiasFilterState.selected?.id,
+                        pageIndex = absoluteIndex / pageSize,
+                    ),
+                )
+                pendingTarget = null
+                notificationOpenError = null
+                notificationAutoPagesLoaded = 0
+                notificationGlobalFallbackAttempted = false
+                notificationRefreshState = CarteleraTargetRefreshState.REQUIRED
+                return@LaunchedEffect
+            }
+        }
+        if (isLoading) return@LaunchedEffect
+        if (error != null || warning != null) return@LaunchedEffect
+
+        if (notificationRefreshState == CarteleraTargetRefreshState.REQUIRED) {
+            scope.launch { refreshPendingNotificationTarget() }
+            return@LaunchedEffect
+        }
+        if (notificationRefreshState == CarteleraTargetRefreshState.IN_PROGRESS) {
+            return@LaunchedEffect
+        }
+
+        if (!expectedFilterLoaded) {
+            scope.launch { loadPage(reset = true, forceRefresh = true) }
+            return@LaunchedEffect
+        }
+
+        when (
+            notificationSearchDecision(
+                hasMore = hasMore,
+                automaticallyLoadedPages = notificationAutoPagesLoaded,
+                searchedWithMateriaFilter = selectedTargetFilter,
+                globalFallbackAttempted = notificationGlobalFallbackAttempted,
+                isLocalRestoration = target.localSelectionRestoration() != null,
+                maximumAutomaticPages = maxOf(
+                    DEFAULT_NOTIFICATION_SEARCH_PAGE_LIMIT,
+                    target.localSelectionRestoration()?.pageIndex ?: 0,
+                ),
+            )
+        ) {
+            NotificationSearchDecision.LOAD_NEXT_PAGE -> {
+                notificationAutoPagesLoaded += 1
+                scope.launch { loadPage(reset = false) }
+            }
+
+            NotificationSearchDecision.RETRY_GLOBAL_FEED -> {
+                notificationGlobalFallbackAttempted = true
+                notificationAutoPagesLoaded = 0
+                // El cambio de filtro dispara el refresh global; marcarlo en progreso evita
+                // que el resolver programe en paralelo una segunda solicitud de reinicio.
+                notificationRefreshState = CarteleraTargetRefreshState.IN_PROGRESS
+                feedState.clearFeedback()
+                materiasFilterState.clearSelection()
+            }
+
+            NotificationSearchDecision.NOT_FOUND -> {
+                notificationOpenError =
+                    "La publicación de la notificación ya no está disponible en cartelera."
+                cancelPendingNotification()
+            }
+
+            NotificationSearchDecision.SEARCH_LIMIT_REACHED -> {
+                notificationOpenError =
+                    "No se pudo encontrar automáticamente la publicación. " +
+                        "Podés buscarla de forma manual en la cartelera."
+                cancelPendingNotification()
+            }
+        }
     }
 
     val shouldLoadMore by remember {
@@ -364,9 +571,17 @@ fun MateriasScreen(
             total > 0 && lastVisible >= total - 3
         }
     }
-
-    LaunchedEffect(shouldLoadMore) {
-        if (selected == null && shouldLoadMore && !loadingInitial && !loadingMore && error == null) {
+    LaunchedEffect(shouldLoadMore, hasMore, offset, pendingTarget) {
+        if (
+            selected == null &&
+            pendingTarget == null &&
+            shouldLoadMore &&
+            hasMore &&
+            !loadingInitial &&
+            !loadingMore &&
+            error == null &&
+            warning == null
+        ) {
             loadPage(reset = false)
         }
     }
@@ -374,396 +589,54 @@ fun MateriasScreen(
     if (selected != null) {
         AnuncioDetailScreen(
             anuncio = selected!!,
-            onBack = { selected = null }
+            onBack = ::closeSelectedAnnouncement,
+            warningMessage = warning,
         )
         return
     }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
+    // Mientras se resuelve un destino no se expone el feed: una interacción manual podría
+    // competir con la paginación y ser reemplazada al aparecer el anuncio buscado.
+    val showNotificationOpeningState = pendingTarget != null
 
-        ExposedDropdownMenuBox(
-            expanded = materiasFilterState.expanded,
-            onExpandedChange = { isExpanded ->
-                if (isExpanded) {
-                    materiasFilterState.query = ""
-                }
-                materiasFilterState.expanded = isExpanded
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            OutlinedTextField(
-                value = materiasFilterState.query,
-                onValueChange = {
-                    materiasFilterState.query = it
-                    if (it.isBlank() || materiasFilterState.selected?.nombre?.trim() != it.trim()) {
-                        materiasFilterState.selected = null
-                    }
-                },
-                label = { Text("Filtrar por materia") },
-                placeholder = { Text("Buscar materia…") },
-                trailingIcon = {
-                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = materiasFilterState.expanded)
-                },
-                modifier = Modifier
-                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable, enabled = true)
-                    .fillMaxWidth()
+    if (showNotificationOpeningState) {
+        val notificationLoadFeedback = error ?: warning
+        NotificationOpeningState(
+            errorMessage = notificationLoadFeedback,
+            openingKey = notificationOpenEventId to pendingTarget,
+            onCancel = ::cancelPendingNotification,
+        )
+        return
+    }
+
+    MateriasScreenContent(
+        state = MateriasScreenContentState(
+            materias = materias,
+            materiasLoading = materiasLoading,
+            materiasError = materiasError,
+            materiasWarning = materiasWarning,
+            announcementsForDisplay = feedState.announcementsForDisplay,
+            newAnnouncementIdentities = feedState.announcementIdentitiesForDisplay,
+            hideCancelledMessages = hideCancelledMessages,
+            loadingInitial = loadingInitial,
+            loadingMore = loadingMore,
+            error = error,
+            notificationOpenError = notificationOpenError,
+            warning = warning,
+            loadedFilterKey = loadedFilterKey,
+            hasMore = hasMore,
+        ),
+        filterState = materiasFilterState,
+        listState = listState,
+        onAnnouncementClick = { announcement, absoluteIndex ->
+            openAnnouncement(
+                anuncio = announcement,
+                restorationTarget = announcement.toLocalRestorationTarget(
+                    materiaId = materiasFilterState.selected?.id,
+                    pageIndex = absoluteIndex / pageSize,
+                ),
             )
-
-            ExposedDropdownMenu(
-                expanded = materiasFilterState.expanded,
-                onDismissRequest = { materiasFilterState.expanded = false }
-            ) {
-                if (materiasLoading && materias.isEmpty()) {
-                    DropdownMenuItem(
-                        text = { Text("Cargando materias...") },
-                        onClick = { materiasFilterState.expanded = false },
-                        enabled = false
-                    )
-                } else if (materiasFiltradas.isEmpty()) {
-                    DropdownMenuItem(
-                        text = { Text("Sin resultados") },
-                        onClick = { materiasFilterState.expanded = false },
-                        enabled = false
-                    )
-                } else {
-                    Column(
-                        modifier = Modifier
-                            .heightIn(max = 320.dp)
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        materiasFiltradas.forEach { materia ->
-                            DropdownMenuItem(
-                                text = { Text(materia.nombre) },
-                                onClick = {
-                                    materiasFilterState.selected = materia
-                                    materiasFilterState.query = materia.nombre
-                                    materiasFilterState.expanded = false
-                                    focusManager.clearFocus(force = true)
-                                    keyboardController?.hide()
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-
-        if (materiasFilterState.selected != null) {
-            Spacer(Modifier.height(8.dp))
-            TextButton(onClick = {
-                materiasFilterState.selected = null
-                materiasFilterState.query = ""
-            }) {
-                Text("Quitar filtro")
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        if (loadingInitial) {
-            LinearProgressIndicator(Modifier.fillMaxWidth())
-            Spacer(Modifier.height(12.dp))
-        }
-
-        if (error != null) {
-            Text(error.orEmpty(), color = MaterialTheme.colorScheme.error)
-            Spacer(Modifier.height(8.dp))
-//            Button(
-//                onClick = { scope.launch { loadPage(reset = false) } },
-//                enabled = !loadingInitial && !loadingMore
-//            ) {
-//                Text("Reintentar cargar más")
-//            }
-//            Spacer(Modifier.height(12.dp))
-        }
-
-        val anunciosVisibles = remember(anuncios, hideCancelledMessages) {
-            if (hideCancelledMessages) anuncios.filterNot { it.isAnulado } else anuncios
-        }
-
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            itemsIndexed(anunciosVisibles, key = { _, item -> keyOf(item) }) { index, a ->
-                AnuncioCard(
-                    anuncio = a,
-                    isNew = materiasFilterState.selected == null && index < newCount,
-                    onClick = { selected = a }
-                )
-            }
-
-            item {
-                Spacer(Modifier.height(8.dp))
-
-                if (loadingMore) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                        CircularProgressIndicator()
-                    }
-                    Spacer(Modifier.height(8.dp))
-                } else {
-                    Button(
-                        onClick = { scope.launch { loadPage(reset = false) } },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !loadingInitial && !loadingMore
-                    ) {
-                        Text("Cargar más")
-                    }
-                    Spacer(Modifier.height(8.dp))
-                }
-            }
-        }
-    }
-}
-
-private fun errorMessageFor(error: Throwable): String {
-    val errorDetail = error.message?.takeIf { it.isNotBlank() }
-        ?: error::class.java.simpleName.takeIf { it.isNotBlank() }
-        ?: "Error desconocido"
-
-    fun withDebugDetail(baseMessage: String): String {
-        return if (BuildConfig.DEBUG) "$baseMessage ($errorDetail)." else baseMessage
-    }
-
-    return when (error) {
-        is ApiException -> {
-            val suffix = error.httpCode?.let { " (HTTP $it)" } ?: ""
-            withDebugDetail("Hubo un error al obtener los anuncios$suffix")
-        }
-        is IOException -> withDebugDetail("Hubo un error de red al obtener los anuncios")
-        else -> withDebugDetail("Hubo un error al obtener los anuncios")
-    }
-}
-
-@Composable
-private fun AnuncioCard(
-    anuncio: Mensaje,
-    isNew: Boolean,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .alpha(if (isNew) 1f else 0.6f)
-            .clickable { onClick() }
-    ) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        anuncio.titulo,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 4,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (anuncio.adjuntos.isNotEmpty()) {
-                        Icon(
-                            imageVector = Icons.Default.AttachFile,
-                            contentDescription = "Tiene adjuntos",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-                if (isNew) {
-                    Text(
-                        text = "Nuevo",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-            Text(anuncio.materia, style = MaterialTheme.typography.bodySmall)
-
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(anuncio.fecha, style = MaterialTheme.typography.labelSmall)
-                Text(anuncio.autor, style = MaterialTheme.typography.labelSmall)
-            }
-
-            if (anuncio.isAnulado) {
-                Text("ANULADO", color = MaterialTheme.colorScheme.error)
-            }
-
-            val preview = remember(anuncio.cuerpoHtml) {
-                HtmlCompat.fromHtml(
-                    anuncio.cuerpoHtml,
-                    HtmlCompat.FROM_HTML_MODE_LEGACY
-                ).toString()
-                    .replace("\n", " ")
-                    .replace("\r", " ")
-                    .take(180) + if (anuncio.cuerpoHtml.length > 180) "…" else ""
-            }
-            Text(preview, style = MaterialTheme.typography.bodyMedium)
-        }
-    }
-}
-
-@Composable
-private fun AnuncioDetailScreen(
-    anuncio: Mensaje,
-    onBack: () -> Unit
-) {
-    BackHandler(onBack = onBack)
-    val context = LocalContext.current
-    val uriHandler = LocalUriHandler.current
-    val detailScrollState = rememberScrollState()
-    Column(
-        Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        Text(anuncio.titulo, style = MaterialTheme.typography.headlineSmall)
-        Spacer(Modifier.height(4.dp))
-        Text(anuncio.materia, style = MaterialTheme.typography.titleMedium)
-
-        Spacer(Modifier.height(6.dp))
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(anuncio.fecha, style = MaterialTheme.typography.bodySmall)
-            Text(anuncio.autor, style = MaterialTheme.typography.bodySmall)
-        }
-
-        if (anuncio.isAnulado) {
-            Spacer(Modifier.height(8.dp))
-            Text("ANULADO", color = MaterialTheme.colorScheme.error)
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        val textColor = MaterialTheme.colorScheme.onSurface.toArgb()
-        val linkColor = MaterialTheme.colorScheme.primary.toArgb()
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(MaterialTheme.shapes.medium)
-                .background(MaterialTheme.colorScheme.surface)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(detailScrollState)
-                    .padding(12.dp)
-            ) {
-                @Suppress("COMPOSE_APPLIER_CALL_MISMATCH")
-                AndroidView(
-                    modifier = Modifier.fillMaxWidth(),
-                    factory = {
-                        TextView(context).apply {
-                            // habilita links <a href=...>
-                            setTextIsSelectable(true)
-                            movementMethod = LinkMovementMethod.getInstance()
-                        }
-                    },
-                    update = { tv ->
-                        tv.setTextColor(textColor)
-                        tv.setLinkTextColor(linkColor)
-                        tv.text = parseHtmlWithoutTextColors(anuncio.cuerpoHtml)
-                    }
-                )
-
-                if (anuncio.adjuntos.isNotEmpty()) {
-                    Spacer(Modifier.height(16.dp))
-                    HorizontalDivider()
-                    Spacer(Modifier.height(12.dp))
-                    Text("Adjuntos", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(8.dp))
-                    anuncio.adjuntos.forEach { adjunto ->
-                        Text(
-                            text = adjunto.nombre,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    val normalizedUri = normalizeAttachmentUri(adjunto.publicPath)
-                                    if (normalizedUri == null) {
-                                        Toast.makeText(
-                                            context,
-                                            "No se pudo abrir el adjunto",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                        return@clickable
-                                    }
-
-                                    runCatching { uriHandler.openUri(normalizedUri) }
-                                        .onFailure {
-                                            Toast.makeText(
-                                                context,
-                                                "No se pudo abrir el adjunto",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
-                                }
-                                .padding(vertical = 4.dp)
-                        )
-                    }
-                }
-            }
-
-            ScrollMoreHint(
-                scrollState = detailScrollState,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 8.dp)
-            )
-        }
-    }
-}
-
-@SuppressLint("UseKtx")
-private fun normalizeAttachmentUri(rawUri: String): String? {
-    val trimmed = rawUri.trim()
-    if (trimmed.isEmpty()) return null
-
-    val parsedUri = trimmed.toUri()
-    val scheme = parsedUri.scheme?.lowercase()
-    if (scheme == "http" || scheme == "https") {
-        return parsedUri.toString()
-    }
-
-    return null
-}
-
-private fun buildShareText(anuncio: Mensaje): String {
-    val mensajePlano = htmlToShareText(anuncio.cuerpoHtml)
-    val adjuntosPlano = anuncio.adjuntos.mapNotNull { adjunto ->
-        val normalizedUri = normalizeAttachmentUri(adjunto.publicPath) ?: return@mapNotNull null
-        "${adjunto.nombre} ($normalizedUri)"
-    }
-
-    val sections = mutableListOf(
-        listOf(
-            anuncio.titulo,
-            anuncio.materia,
-            anuncio.fecha,
-            anuncio.autor
-        ).joinToString("\n")
+        },
+        onLoadMore = { scope.launch { loadPage(reset = false) } },
     )
-
-    if (mensajePlano.isNotBlank()) {
-        sections += mensajePlano
-    }
-
-    if (adjuntosPlano.isNotEmpty()) {
-        sections += buildString {
-            appendLine("Adjuntos:")
-            adjuntosPlano.forEach { appendLine(it) }
-        }.trimEnd()
-    }
-
-    return sections.joinToString("\n\n")
 }

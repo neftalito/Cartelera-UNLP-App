@@ -1,0 +1,137 @@
+name: Proponer una funcionalidad
+description: Sugerí una mejora o una nueva capacidad para la aplicación.
+title: "[Funcionalidad]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por compartir tu propuesta. Describir primero el problema ayuda a evaluar soluciones y alcance.
+
+        No incluyas credenciales, datos personales ni información privada.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Comprobaciones previas
+      options:
+        - label: Busqué en los issues abiertos y cerrados y no encontré una propuesta equivalente.
+          required: true
+        - label: Comprobé que la funcionalidad no existe ya en la versión actual.
+          required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área relacionada
+      options:
+        - Cartelera y anuncios
+        - Cursadas
+        - Suscripciones
+        - Estado o reservas de aulas
+        - Horarios
+        - Planes de estudio
+        - Materias optativas
+        - Calendario académico
+        - Notificaciones
+        - Ajustes
+        - Navegación o interfaz general
+        - Accesibilidad
+        - Rendimiento o uso sin conexión
+        - Otra
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema o necesidad
+      description: Explicá qué resulta difícil, imposible o poco claro actualmente. Evitá describir sólo la solución.
+      placeholder: Cuando intento..., necesito..., pero actualmente...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Solución propuesta
+      description: Contá cómo imaginás que debería funcionar desde el punto de vista de la persona usuaria.
+    validations:
+      required: true
+
+  - type: textarea
+    id: benefit
+    attributes:
+      label: Beneficio
+      description: ¿A quién ayuda y qué mejora respecto del comportamiento actual?
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Criterios de aceptación
+      description: Enumerá resultados observables que permitirían considerar terminada la funcionalidad.
+      placeholder: |
+        - La persona puede...
+        - Si no hay red...
+        - Cuando no existen resultados...
+    validations:
+      required: true
+
+  - type: textarea
+    id: user_flow
+    attributes:
+      label: Flujo o diseño sugerido
+      description: Describí pantallas, acciones y estados relevantes. Podés adjuntar un boceto.
+
+  - type: textarea
+    id: data_source
+    attributes:
+      label: Fuente de datos o integración
+      description: Si depende de información externa, indicá la URL pública, API o servicio y cualquier limitación conocida.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
+      description: ¿Existe una solución temporal o evaluaste otro enfoque?
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Alcance estimado
+      options:
+        - Cambio pequeño en una función existente
+        - Nueva pantalla o flujo
+        - Cambio que afecta varias áreas
+        - No lo sé
+    validations:
+      required: true
+
+  - type: dropdown
+    id: contribution
+    attributes:
+      label: Participación
+      description: Esto no condiciona que la propuesta sea evaluada.
+      options:
+        - Puedo implementar la funcionalidad
+        - Puedo ayudar con pruebas o documentación
+        - Sólo propongo la idea
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Contexto adicional
+      description: Añadí enlaces públicos, ejemplos, capturas o cualquier detalle que ayude a evaluar la propuesta.
+
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacidad
+      options:
+        - label: Confirmo que revisé el contenido y no publiqué secretos ni datos personales.
+          required: true

@@ -1,3 +1,4 @@
+/** Inicializa manualmente el cliente Firebase con la configuración validada. */
 package com.overcoders.unlpcarteleranotifier.push
 
 import android.content.Context

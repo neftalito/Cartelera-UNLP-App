@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<!-- Declara permisos, componentes y reglas de entrada de la aplicación Android. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
         android:name=".UNLPCarteleraNotifierApplication"
@@ -19,9 +19,16 @@
             android:name="firebase_messaging_installation_id_enabled"
             android:value="true" />
 
+        <!-- La app inicializa Firebase manualmente desde BuildConfig en Application. -->
+        <provider
+            android:name="com.google.firebase.provider.FirebaseInitProvider"
+            android:authorities="${applicationId}.firebaseinitprovider"
+            tools:node="remove" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.UNLPCarteleraNotifier">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -30,18 +37,13 @@
             </intent-filter>
         </activity>
 
-        <!-- Compatibilidad transitoria: este receiver solo existe para cancelar trabajos
-             legacy restaurados por el sistema. Cuando se elimine el stack viejo de polling,
-             este bloque también debería borrarse. -->
-        <receiver
-            android:name=".worker.BootReceiver"
-            android:exported="true"
-            android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-            </intent-filter>
-        </receiver>
+        <!-- Los extras de notificación sólo ingresan por esta actividad interna. -->
+        <activity
+            android:name=".push.NotificationOpenActivity"
+            android:exported="false"
+            android:noHistory="true"
+            android:relinquishTaskIdentity="true"
+            android:theme="@android:style/Theme.NoDisplay" />
 
         <service
             android:name=".push.CarteleraFirebaseMessagingService"

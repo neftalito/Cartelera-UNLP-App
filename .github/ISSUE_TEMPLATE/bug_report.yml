@@ -1,0 +1,162 @@
+name: Reportar un bug
+description: Informá un comportamiento incorrecto o inesperado de la aplicación.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por ayudar a mejorar Cartelera UNLP App. Completá la información necesaria para que el problema pueda reproducirse.
+
+        No incluyas claves, tokens, credenciales, datos personales ni información privada en este formulario, capturas o logs.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Comprobaciones previas
+      options:
+        - label: Busqué en los issues abiertos y cerrados y no encontré el mismo problema.
+          required: true
+        - label: Estoy usando una versión oficial o una compilación reciente del repositorio.
+          required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Descripción del problema
+      description: Explicá de forma breve y concreta qué está fallando.
+      placeholder: Al abrir..., la aplicación...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área afectada
+      options:
+        - Cartelera y anuncios
+        - Cursadas
+        - Suscripciones
+        - Estado o reservas de aulas
+        - Horarios
+        - Planes de estudio
+        - Materias optativas
+        - Calendario académico
+        - Notificaciones
+        - Ajustes
+        - Navegación o interfaz general
+        - Compilación o instalación
+        - Otra
+    validations:
+      required: true
+
+  - type: input
+    id: app_version
+    attributes:
+      label: Versión de la app
+      description: Está visible en la información de la aplicación o en la build que compilaste.
+      placeholder: "Ejemplo: 2.2.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install_source
+    attributes:
+      label: Origen de la instalación
+      options:
+        - Google Play
+        - APK publicado en GitHub
+        - Compilación propia desde main
+        - Compilación propia desde develop
+        - Otra rama o fork
+        - No lo sé
+    validations:
+      required: true
+
+  - type: input
+    id: android_version
+    attributes:
+      label: Versión de Android
+      placeholder: "Ejemplo: Android 15"
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Dispositivo
+      description: Indicá marca y modelo, o los datos del emulador.
+      placeholder: "Ejemplo: Samsung Galaxy A54"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos para reproducirlo
+      description: Enumerá el recorrido exacto desde que abrís la app.
+      placeholder: |
+        1. Abrir...
+        2. Seleccionar...
+        3. Pulsar...
+        4. Observar...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Resultado actual
+      description: ¿Qué ocurrió? Incluí el mensaje de error exacto si existe.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Resultado esperado
+      description: ¿Qué debería haber ocurrido?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: Frecuencia
+      options:
+        - Siempre
+        - Casi siempre
+        - Algunas veces
+        - Ocurrió una sola vez
+        - No pude volver a probarlo
+    validations:
+      required: true
+
+  - type: input
+    id: last_working_version
+    attributes:
+      label: Última versión conocida sin el problema
+      description: Completalo sólo si sabés que antes funcionaba.
+      placeholder: "Ejemplo: 2.2.0"
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Capturas, video o logs
+      description: Arrastrá los archivos aquí. Recortá los logs a la parte relevante y eliminá datos sensibles.
+      placeholder: Adjuntá evidencia si ayuda a entender o reproducir el problema.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Contexto adicional
+      description: Indicá, por ejemplo, si ocurre sólo con Wi-Fi, datos móviles, una materia, una URL o después de una actualización.
+
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacidad
+      options:
+        - label: Confirmo que revisé el contenido y no publiqué secretos ni datos personales.
+          required: true

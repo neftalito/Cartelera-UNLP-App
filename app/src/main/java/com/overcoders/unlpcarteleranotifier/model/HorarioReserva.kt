@@ -1,3 +1,4 @@
+/** Modela períodos, materias y reservas que componen un horario. */
 package com.overcoders.unlpcarteleranotifier.model
 
 data class HorarioPeriodo(
