@@ -38,6 +38,65 @@ class CarteleraNotificationMatcherTest {
     }
 
     @Test
+    fun matchesFiveAnnouncementsObservedInCurrentNotificationBatch() {
+        val targets = listOf(
+            notificationTarget(
+                materiaId = "64",
+                materia = "Matemática 2",
+                titulo = "Información cursada 2026",
+                fecha = "03/08/2026 16:11",
+                autor = "María Mercedes Olea",
+            ),
+            notificationTarget(
+                materiaId = "295",
+                materia = "Aprendizaje Automático Profundo (Deep Learning)",
+                titulo = "Inicio de clases",
+                fecha = "03/08/2026 15:28",
+                autor = "Laura Lanzarini",
+            ),
+            notificationTarget(
+                materiaId = "203",
+                materia = "Conceptos y Aplicaciones de Big Data",
+                titulo = "Comienzo de cursada",
+                fecha = "03/08/2026 14:04",
+                autor = "Waldo Hasperue",
+            ),
+            notificationTarget(
+                materiaId = "344",
+                materia = "Minería de Datos y Aprendizaje Automático",
+                titulo = "Inicio de cursada",
+                fecha = "03/08/2026 13:37",
+                autor = "Franco Ronchetti",
+            ),
+            notificationTarget(
+                materiaId = "61",
+                materia = "Organización de Computadoras",
+                titulo = "Resultados Mesa Final de Julio",
+                fecha = "03/08/2026 11:42",
+                autor = "Horacio Villagarcia",
+            ),
+        )
+        val announcements = targets.map { target ->
+            Mensaje(
+                materia = target.materia,
+                titulo = target.titulo,
+                cuerpoHtml = "",
+                fecha = target.fecha,
+                autor = target.autor,
+                isAnulado = target.isAnulado,
+                adjuntos = emptyList(),
+            )
+        }
+
+        targets.forEachIndexed { index, target ->
+            assertEquals(
+                announcements[index],
+                findAnuncioForNotification(announcements, target),
+            )
+        }
+    }
+
+    @Test
     fun rejectsDifferentAuthorWhenTargetProvidesOne() {
         val target = CarteleraNotificationTarget(
             materiaId = "1",
@@ -110,6 +169,30 @@ class CarteleraNotificationMatcherTest {
                 expectedFilterLoaded = true,
                 targetRefreshCompleted = true,
             )
+        )
+    }
+
+    @Test
+    fun cancelledCurrentRefreshReturnsToRetryableState() {
+        assertEquals(
+            CarteleraTargetRefreshState.REQUIRED,
+            notificationRefreshStateAfterCancellation(
+                currentState = CarteleraTargetRefreshState.IN_PROGRESS,
+                isLatestAttempt = true,
+                targetStillPending = true,
+            ),
+        )
+    }
+
+    @Test
+    fun staleCancellationDoesNotOverrideTheCurrentRefresh() {
+        assertEquals(
+            CarteleraTargetRefreshState.IN_PROGRESS,
+            notificationRefreshStateAfterCancellation(
+                currentState = CarteleraTargetRefreshState.IN_PROGRESS,
+                isLatestAttempt = false,
+                targetStillPending = true,
+            ),
         )
     }
 
@@ -263,5 +346,21 @@ class CarteleraNotificationMatcherTest {
         autor = message.autor,
         resumen = "La publicación cambió",
         isAnulado = true,
+    )
+
+    private fun notificationTarget(
+        materiaId: String,
+        materia: String,
+        titulo: String,
+        fecha: String,
+        autor: String,
+    ) = CarteleraNotificationTarget(
+        materiaId = materiaId,
+        materia = materia,
+        titulo = titulo,
+        fecha = fecha,
+        autor = autor,
+        resumen = "",
+        isAnulado = false,
     )
 }

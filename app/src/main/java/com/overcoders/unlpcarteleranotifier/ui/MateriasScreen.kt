@@ -39,6 +39,7 @@ import com.overcoders.unlpcarteleranotifier.ui.cartelera.announcementsRefreshHea
 import com.overcoders.unlpcarteleranotifier.ui.cartelera.canResolveCarteleraTargetFromCurrentAnnouncements
 import com.overcoders.unlpcarteleranotifier.ui.cartelera.findAnuncioForNotification
 import com.overcoders.unlpcarteleranotifier.ui.cartelera.localSelectionRestoration
+import com.overcoders.unlpcarteleranotifier.ui.cartelera.notificationRefreshStateAfterCancellation
 import com.overcoders.unlpcarteleranotifier.ui.cartelera.notificationSearchDecision
 import com.overcoders.unlpcarteleranotifier.ui.cartelera.notificationTargetFilterId
 import com.overcoders.unlpcarteleranotifier.ui.cartelera.rememberMateriasFeedState
@@ -108,6 +109,10 @@ fun MateriasScreen(
     }
     var notificationOpenError by remember { mutableStateOf<String?>(null) }
     var notificationAutoPagesLoaded by remember { mutableIntStateOf(0) }
+    var notificationRefreshAttempt by remember { mutableIntStateOf(0) }
+    var notificationRefreshRequest by remember { mutableIntStateOf(0) }
+    var notificationRefreshRecoveryAttempted by remember { mutableStateOf(false) }
+    var preserveNotificationOpenErrorOnNextLoad by remember { mutableStateOf(false) }
     var notificationGlobalFallbackAttempted by rememberSaveable { mutableStateOf(false) }
     var notificationRefreshState by remember {
         mutableStateOf(CarteleraTargetRefreshState.REQUIRED)
@@ -115,7 +120,7 @@ fun MateriasScreen(
     val materias by materiasRepository.items.collectAsStateWithLifecycle()
     var materiasError by remember { mutableStateOf<String?>(null) }
     var materiasWarning by remember { mutableStateOf<String?>(null) }
-    var materiasLoading by remember { mutableStateOf(false) }
+    var materiasLoading by remember { mutableStateOf(true) }
 
     fun openAnnouncement(
         anuncio: Mensaje,
@@ -143,14 +148,21 @@ fun MateriasScreen(
     fun cancelPendingNotification() {
         selected = null
         selectedAnnouncementKey = null
+        notificationRefreshAttempt += 1
         finishPendingNotification()
         notificationTargetForRestoration = null
         notificationAutoPagesLoaded = 0
+        notificationRefreshRecoveryAttempted = false
+        preserveNotificationOpenErrorOnNextLoad = false
         notificationGlobalFallbackAttempted = false
         notificationRefreshState = CarteleraTargetRefreshState.REQUIRED
     }
 
-    suspend fun loadPage(reset: Boolean, forceRefresh: Boolean = false) {
+    suspend fun loadPage(
+        reset: Boolean,
+        forceRefresh: Boolean = false,
+        preserveNotificationOpenError: Boolean = false,
+    ) {
         feedState.loadPage(
             reset = reset,
             forceRefresh = forceRefresh,
@@ -158,7 +170,11 @@ fun MateriasScreen(
                 materiasFilterState.selected?.id?.toMateriaCatalogIdOrNull()
             },
             hasPendingNotification = pendingTarget != null,
-            onClearNotificationOpenError = { notificationOpenError = null },
+            onClearNotificationOpenError = {
+                if (!preserveNotificationOpenError) {
+                    notificationOpenError = null
+                }
+            },
         )
     }
     LaunchedEffect(selected) {
@@ -212,17 +228,27 @@ fun MateriasScreen(
         }
     }
 
-    suspend fun refreshPendingNotificationTarget() {
-        val target = pendingTarget ?: return
+    suspend fun refreshPendingNotificationTarget(target: CarteleraNotificationTarget) {
+        val refreshAttempt = notificationRefreshAttempt + 1
+        notificationRefreshAttempt = refreshAttempt
         notificationRefreshState = CarteleraTargetRefreshState.IN_PROGRESS
-        loadPage(
-            reset = true,
-            // Una selección local restaurada debe poder resolverse desde el snapshot persistido.
-            // Los destinos externos sí exigen una consulta actual para evitar abrir datos obsoletos.
-            forceRefresh = target.localSelectionRestoration() == null,
-        )
-        if (pendingTarget == target) {
-            notificationRefreshState = CarteleraTargetRefreshState.COMPLETED
+        try {
+            loadPage(
+                reset = true,
+                // Una selección local restaurada debe poder resolverse desde el snapshot persistido.
+                // Los destinos externos sí exigen una consulta actual para evitar abrir datos obsoletos.
+                forceRefresh = target.localSelectionRestoration() == null,
+            )
+            if (notificationRefreshAttempt == refreshAttempt && pendingTarget == target) {
+                notificationRefreshState = CarteleraTargetRefreshState.COMPLETED
+            }
+        } catch (e: CancellationException) {
+            notificationRefreshState = notificationRefreshStateAfterCancellation(
+                currentState = notificationRefreshState,
+                isLatestAttempt = notificationRefreshAttempt == refreshAttempt,
+                targetStillPending = pendingTarget == target,
+            )
+            throw e
         }
     }
 
@@ -234,8 +260,11 @@ fun MateriasScreen(
             pendingNotificationOpenEventId = notificationOpenEventId
             notificationTargetForRestoration = initialTarget
             notificationOpenError = null
+            preserveNotificationOpenErrorOnNextLoad = false
             feedState.clearFeedback()
             notificationAutoPagesLoaded = 0
+            notificationRefreshAttempt += 1
+            notificationRefreshRecoveryAttempted = false
             notificationGlobalFallbackAttempted = false
             notificationRefreshState = CarteleraTargetRefreshState.REQUIRED
             onInitialTargetConsumed()
@@ -253,8 +282,11 @@ fun MateriasScreen(
         ) {
             pendingTarget = target
             notificationOpenError = null
+            preserveNotificationOpenErrorOnNextLoad = false
             feedState.clearFeedback()
             notificationAutoPagesLoaded = 0
+            notificationRefreshAttempt += 1
+            notificationRefreshRecoveryAttempted = false
             notificationGlobalFallbackAttempted = false
             notificationRefreshState = CarteleraTargetRefreshState.REQUIRED
         }
@@ -345,11 +377,15 @@ fun MateriasScreen(
         loadMateriasCatalog()
     }
 
+    val selectedMateriaId = materiasFilterState.selected?.id
     LaunchedEffect(
-        pendingTarget?.materiaId,
+        pendingTarget,
+        pendingNotificationOpenEventId,
         notificationGlobalFallbackAttempted,
+        notificationRefreshRequest,
         materias,
         materiasLoading,
+        selectedMateriaId,
     ) {
         val target = pendingTarget ?: return@LaunchedEffect
         val materiaId = target.materiaId
@@ -361,7 +397,10 @@ fun MateriasScreen(
             availableMateriaIds = materias.mapTo(mutableSetOf()) { it.id },
             useGlobalFallback = notificationGlobalFallbackAttempted,
         )
-        if (materiasFilterState.selected?.id == desiredMateriaId) return@LaunchedEffect
+        if (selectedMateriaId == desiredMateriaId) {
+            refreshPendingNotificationTarget(target)
+            return@LaunchedEffect
+        }
         val materia = materias.firstOrNull { it.id == desiredMateriaId }
         if (materia != null) {
             materiasFilterState.select(materia)
@@ -371,17 +410,20 @@ fun MateriasScreen(
         }
     }
 
-    LaunchedEffect(materiasFilterState.selected?.id) {
-        val selectedFilterKey = materiasFilterState.selected?.id?.toMateriaCatalogIdOrNull()?.toString()
+    LaunchedEffect(selectedMateriaId, pendingTarget == null) {
+        if (pendingTarget != null || selected != null) return@LaunchedEffect
+        val selectedFilterKey = selectedMateriaId?.toMateriaCatalogIdOrNull()?.toString()
             ?: "__all__"
         if (paginationRestorationFilterKey != selectedFilterKey) {
             listState.scrollToItem(0)
         }
-        if (pendingTarget != null) {
-            refreshPendingNotificationTarget()
-        } else {
-            loadPage(reset = true)
-        }
+        val preserveNotificationOpenError = preserveNotificationOpenErrorOnNextLoad
+        preserveNotificationOpenErrorOnNextLoad = false
+        loadPage(
+            reset = true,
+            // Los cierres automáticos por no encontrado deben conservar su explicación.
+            preserveNotificationOpenError = preserveNotificationOpenError,
+        )
     }
 
     LaunchedEffect(listState, listPositionRestorationPending) {
@@ -522,16 +564,24 @@ fun MateriasScreen(
         if (isLoading) return@LaunchedEffect
         if (error != null || warning != null) return@LaunchedEffect
 
-        if (notificationRefreshState == CarteleraTargetRefreshState.REQUIRED) {
-            scope.launch { refreshPendingNotificationTarget() }
-            return@LaunchedEffect
-        }
-        if (notificationRefreshState == CarteleraTargetRefreshState.IN_PROGRESS) {
+        if (notificationRefreshState != CarteleraTargetRefreshState.COMPLETED) {
             return@LaunchedEffect
         }
 
         if (!expectedFilterLoaded) {
-            scope.launch { loadPage(reset = true, forceRefresh = true) }
+            if (!notificationRefreshRecoveryAttempted) {
+                // Una solicitud invalidada vuelve una vez al único coordinador que puede
+                // reiniciarla. Si tampoco converge, se libera la pantalla en vez de esperar.
+                notificationRefreshRecoveryAttempted = true
+                notificationRefreshState = CarteleraTargetRefreshState.REQUIRED
+                notificationRefreshRequest += 1
+            } else {
+                notificationOpenError =
+                    "No se pudo cargar la publicación de la notificación. " +
+                        "Podés buscarla de forma manual en la cartelera."
+                cancelPendingNotification()
+                preserveNotificationOpenErrorOnNextLoad = true
+            }
             return@LaunchedEffect
         }
 
@@ -556,9 +606,7 @@ fun MateriasScreen(
             NotificationSearchDecision.RETRY_GLOBAL_FEED -> {
                 notificationGlobalFallbackAttempted = true
                 notificationAutoPagesLoaded = 0
-                // El cambio de filtro dispara el refresh global; marcarlo en progreso evita
-                // que el resolver programe en paralelo una segunda solicitud de reinicio.
-                notificationRefreshState = CarteleraTargetRefreshState.IN_PROGRESS
+                notificationRefreshRecoveryAttempted = false
                 feedState.clearFeedback()
                 materiasFilterState.clearSelection()
             }
@@ -567,6 +615,7 @@ fun MateriasScreen(
                 notificationOpenError =
                     "La publicación de la notificación ya no está disponible en cartelera."
                 cancelPendingNotification()
+                preserveNotificationOpenErrorOnNextLoad = true
             }
 
             NotificationSearchDecision.SEARCH_LIMIT_REACHED -> {
@@ -574,6 +623,7 @@ fun MateriasScreen(
                     "No se pudo encontrar automáticamente la publicación. " +
                         "Podés buscarla de forma manual en la cartelera."
                 cancelPendingNotification()
+                preserveNotificationOpenErrorOnNextLoad = true
             }
         }
     }

@@ -72,6 +72,20 @@ internal enum class CarteleraTargetRefreshState {
     COMPLETED,
 }
 
+internal fun notificationRefreshStateAfterCancellation(
+    currentState: CarteleraTargetRefreshState,
+    isLatestAttempt: Boolean,
+    targetStillPending: Boolean,
+): CarteleraTargetRefreshState = if (
+    currentState == CarteleraTargetRefreshState.IN_PROGRESS &&
+    isLatestAttempt &&
+    targetStillPending
+) {
+    CarteleraTargetRefreshState.REQUIRED
+} else {
+    currentState
+}
+
 internal fun notificationTargetFilterId(
     targetMateriaId: String?,
     availableMateriaIds: Set<String>,

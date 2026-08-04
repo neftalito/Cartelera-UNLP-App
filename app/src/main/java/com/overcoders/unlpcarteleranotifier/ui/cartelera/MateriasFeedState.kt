@@ -41,6 +41,30 @@ internal data class MateriasListPosition(
     val scrollOffset: Int,
 )
 
+internal data class MateriasListRestoration(
+    val targetOffset: Int,
+    val index: Int,
+    val scrollOffset: Int,
+    val pending: Boolean,
+)
+
+internal fun listRestorationAfterSuccessfulGlobalRefresh(
+    newAnnouncementCount: Int,
+    loadedOffset: Int,
+    current: MateriasListRestoration,
+): MateriasListRestoration {
+    if (newAnnouncementCount <= 0) return current
+
+    return MateriasListRestoration(
+        // Si el estado restaurado esperaba más páginas que las ya actualizadas, no hace falta
+        // seguir cargándolas antes de mostrar las novedades que acaban de llegar.
+        targetOffset = loadedOffset,
+        index = 0,
+        scrollOffset = 0,
+        pending = true,
+    )
+}
+
 @Stable
 internal class MateriasFeedState(
     private val context: Context,
@@ -321,6 +345,20 @@ internal class MateriasFeedState(
                 val storedTotal = lastSeenTotal ?: -1
                 val diff = if (storedTotal < 0) 0 else (page.total - storedTotal).coerceAtLeast(0)
                 newCount = if (storedTotal < 0) 0 else diff
+                val updatedRestoration = listRestorationAfterSuccessfulGlobalRefresh(
+                    newAnnouncementCount = newCount,
+                    loadedOffset = offset,
+                    current = MateriasListRestoration(
+                        targetOffset = paginationRestorationTargetOffset,
+                        index = savedListIndex,
+                        scrollOffset = savedListScrollOffset,
+                        pending = listPositionRestorationPending,
+                    ),
+                )
+                paginationRestorationTargetOffsetState.intValue = updatedRestoration.targetOffset
+                savedListIndexState.intValue = updatedRestoration.index
+                savedListScrollOffsetState.intValue = updatedRestoration.scrollOffset
+                listPositionRestorationPending = updatedRestoration.pending
                 if (newCount > 0) {
                     android.widget.Toast.makeText(
                         context,
