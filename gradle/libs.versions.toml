@@ -12,7 +12,7 @@ activityCompose = "1.13.0"
 kotlin = "2.4.10"
 composeBom = "2026.06.01"
 okhttp = "5.4.0"
-fragment = "1.8.9"
+fragment = "1.9.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
