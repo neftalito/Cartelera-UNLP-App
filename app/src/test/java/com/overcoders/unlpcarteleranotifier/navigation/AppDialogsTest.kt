@@ -14,7 +14,7 @@ import org.junit.Test
 /** Verifica el texto que la app muestra al abrir avisos generales. */
 class AppDialogsTest {
     @Test
-    fun includesDetailedMessageAndDate() {
+    fun showsOnlyTheDetailedMessage() {
         val body = avisoDialogBody(
             AvisoNotificationTarget(
                 titulo = "Mantenimiento",
@@ -24,13 +24,11 @@ class AppDialogsTest {
             )
         )
 
-        assertTrue(body.contains("El servicio estará pausado hasta las 18."))
-        assertFalse(body.contains("El servicio estará pausado.\n\n"))
-        assertTrue(body.contains("Fecha: 14/07/2026"))
+        assertEquals("El servicio estará pausado hasta las 18.", body)
     }
 
     @Test
-    fun doesNotRenderTheLegacyAuthorLabel() {
+    fun doesNotRenderDateOrLegacyAuthorLabel() {
         val body = avisoDialogBody(
             AvisoNotificationTarget(
                 titulo = "Aviso",
@@ -41,7 +39,7 @@ class AppDialogsTest {
         )
 
         assertTrue(body.contains("Mensaje vigente."))
-        assertTrue(body.contains("Fecha: 14/07/2026"))
+        assertFalse(body.contains("Fecha:"))
         assertFalse(body.contains("Autor:"))
     }
 

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachFile
@@ -16,14 +17,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.text.HtmlCompat
 import com.overcoders.unlpcarteleranotifier.model.Mensaje
+import com.overcoders.unlpcarteleranotifier.ui.common.HtmlTextBlockCard
 
 @Composable
 fun AnuncioCard(
@@ -31,6 +32,7 @@ fun AnuncioCard(
     isNew: Boolean,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -82,21 +84,15 @@ fun AnuncioCard(
                 Text("ANULADO", color = MaterialTheme.colorScheme.error)
             }
 
-            val preview = remember(anuncio.cuerpoHtml) {
-                val plainText = HtmlCompat.fromHtml(
-                    anuncio.cuerpoHtml,
-                    HtmlCompat.FROM_HTML_MODE_LEGACY
-                ).toString()
-                    .replace("\n", " ")
-                    .replace("\r", " ")
-                truncateAnuncioPreview(plainText)
-            }
-            Text(preview, style = MaterialTheme.typography.bodyMedium)
+            HtmlTextBlockCard(
+                html = anuncio.cuerpoHtml,
+                context = context,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 120.dp)
+            )
         }
     }
 }
-
-internal fun truncateAnuncioPreview(plainText: String, limit: Int = 180): String =
-    plainText.take(limit) + if (plainText.length > limit) "…" else ""
 
 internal fun anuncioCardAlpha(isNew: Boolean): Float = if (isNew) 1f else 0.6f

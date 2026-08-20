@@ -9,10 +9,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import com.overcoders.unlpcarteleranotifier.model.AvisoNotificationTarget
 
-internal fun avisoDialogBody(target: AvisoNotificationTarget): String = buildList {
-    add(target.mensajeDetallado)
-    add("Fecha: ${target.fecha}")
-}.joinToString(separator = "\n\n")
+internal fun avisoDialogBody(target: AvisoNotificationTarget): String =
+    target.mensajeDetallado
 
 internal fun updateAvailableDialogBody(storeOpenFailed: Boolean): String = buildList {
     add("Hay una nueva versión disponible en Google Play.")

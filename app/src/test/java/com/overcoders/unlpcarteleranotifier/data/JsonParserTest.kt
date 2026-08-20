@@ -39,6 +39,34 @@ class JsonParserTest {
     }
 
     @Test
+    fun preservesEscapedInlineBase64ImageHtmlFromCarteleraApi() {
+        val dataSource =
+            "data:image/png;base64," +
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8" +
+                "/x8AAusB9Y9Zl1sAAAAASUVORK5CYII="
+        val result = AnunciosService().parse(
+            """
+            {
+              "total": 1,
+              "mensajes": [{
+                "materia": "Organización de Computadoras",
+                "titulo": "Inicio de clases teóricas",
+                "cuerpo": "\u003Cp\u003E\u003Cimg src=\"$dataSource\" alt=\"\" /\u003E\u003C/p\u003E",
+                "fecha": "15/08/2026 11:00",
+                "autor": "Javier Giacomantone",
+                "is_anulado": false,
+                "adjuntos": []
+              }]
+            }
+            """.trimIndent()
+        )
+
+        val body = result.mensajes.single().cuerpoHtml
+        assertTrue(body.startsWith("<p><img"))
+        assertTrue(body.contains("src=\"$dataSource\""))
+    }
+
+    @Test
     fun normalizesNegativeAnunciosTotal() {
         val result = AnunciosService().parse("""{"total": -1, "mensajes": []}""")
 

@@ -97,6 +97,31 @@ class CarteleraNotificationMatcherTest {
     }
 
     @Test
+    fun opensImageOnlyAnnouncementReceivedFromNotification() {
+        val announcement = Mensaje(
+            materia = "Organización de Computadoras",
+            titulo = "Inicio de clases teóricas",
+            cuerpoHtml = "<p><img src=\"data:image/png;base64,iVBORw0KGgo=\" /></p>",
+            fecha = "15/08/2026 11:00",
+            autor = "Javier Giacomantone",
+            isAnulado = false,
+            adjuntos = emptyList(),
+        )
+        val target = notificationTarget(
+            materiaId = "61",
+            materia = announcement.materia,
+            titulo = announcement.titulo,
+            fecha = announcement.fecha,
+            autor = announcement.autor,
+        )
+
+        assertEquals(
+            announcement,
+            findAnuncioForNotification(listOf(announcement), target),
+        )
+    }
+
+    @Test
     fun rejectsDifferentAuthorWhenTargetProvidesOne() {
         val target = CarteleraNotificationTarget(
             materiaId = "1",

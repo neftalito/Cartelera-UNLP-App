@@ -3,6 +3,7 @@
  */
 package com.overcoders.unlpcarteleranotifier.ui.cartelera
 
+import com.overcoders.unlpcarteleranotifier.ui.common.truncateAnuncioPreview
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
